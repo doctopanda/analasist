@@ -3,51 +3,51 @@ import Layout from '../components/Layout';
 import ChartCard from '../components/ChartCard';
 import { format } from 'date-fns';
 
-// Mock data
-const diagnosisData = [
-  { name: 'Dengue', value: 35 },
-  { name: 'COVID-19', value: 40 },
-  { name: 'Influenza', value: 25 },
-  { name: 'Zika', value: 15 },
-  { name: 'Chikungunya', value: 10 }
-];
-
-const timeSeriesData = [
-  { name: '01/01', value: 12 },
-  { name: '02/01', value: 15 },
-  { name: '03/01', value: 18 },
-  { name: '04/01', value: 14 },
-  { name: '05/01', value: 10 },
-  { name: '06/01', value: 8 },
-  { name: '07/01', value: 9 },
-  { name: '08/01', value: 11 },
-  { name: '09/01', value: 13 },
-  { name: '10/01', value: 15 },
-  { name: '11/01', value: 17 },
-  { name: '12/01', value: 19 },
-  { name: '13/01', value: 21 },
-  { name: '14/01', value: 22 },
-];
-
-const riskFactorsData = [
-  { name: 'Diabetes', value: 28 },
-  { name: 'Obesidad', value: 35 },
-  { name: 'Hipertensión', value: 42 },
-  { name: 'Embarazo', value: 12 }
-];
+// Mock data for different diagnoses over time
+const timeSeriesByDiagnosis = {
+  'Dengue': [
+    { name: 'Semana 1', value: 12 },
+    { name: 'Semana 2', value: 15 },
+    { name: 'Semana 3', value: 18 },
+    { name: 'Semana 4', value: 14 }
+  ],
+  'COVID-19': [
+    { name: 'Semana 1', value: 25 },
+    { name: 'Semana 2', value: 30 },
+    { name: 'Semana 3', value: 28 },
+    { name: 'Semana 4', value: 22 }
+  ],
+  'Influenza': [
+    { name: 'Semana 1', value: 8 },
+    { name: 'Semana 2', value: 10 },
+    { name: 'Semana 3', value: 12 },
+    { name: 'Semana 4', value: 9 }
+  ]
+};
 
 const municipalityData = [
-  { name: 'Neza', value: 45 },
-  { name: 'Ecatepec', value: 38 },
-  { name: 'Toluca', value: 32 },
-  { name: 'Cuautitlán', value: 25 },
-  { name: 'Naucalpan', value: 30 }
+  { id: 1, name: 'Hermosillo' },
+  { id: 2, name: 'Cajeme' },
+  { id: 3, name: 'Nogales' },
+  { id: 4, name: 'San Luis Río Colorado' },
+  { id: 5, name: 'Navojoa' }
+];
+
+const districtData = [
+  { id: 1, name: 'Distrito 1' },
+  { id: 2, name: 'Distrito 2' },
+  { id: 3, name: 'Distrito 3' },
+  { id: 4, name: 'Distrito 4' },
+  { id: 5, name: 'Distrito 5' }
 ];
 
 const AnalystDashboard: React.FC = () => {
   const [startDate, setStartDate] = useState('2025-01-01');
   const [endDate, setEndDate] = useState('2025-06-15');
-  const [healthCenter, setHealthCenter] = useState('all');
+  const [selectedDiagnosis, setSelectedDiagnosis] = useState('all');
+  const [selectedMunicipality, setSelectedMunicipality] = useState('all');
+  const [selectedDistrict, setSelectedDistrict] = useState('all');
+  const [viewType, setViewType] = useState('state'); // state, municipality, district
 
   return (
     <Layout title="Panel de Análisis">
@@ -79,21 +79,83 @@ const AnalystDashboard: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="healthCenter" className="block text-sm font-medium text-gray-700 mb-1">
-              Centro de Salud
+            <label htmlFor="diagnosis" className="block text-sm font-medium text-gray-700 mb-1">
+              Diagnóstico
             </label>
             <select
-              id="healthCenter"
-              value={healthCenter}
-              onChange={(e) => setHealthCenter(e.target.value)}
+              id="diagnosis"
+              value={selectedDiagnosis}
+              onChange={(e) => setSelectedDiagnosis(e.target.value)}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="all">Todos</option>
-              <option value="1">Hospital General de la Ciudad</option>
-              <option value="2">Centro de Salud Urbano</option>
+              <option value="all">Todos los diagnósticos</option>
+              <option value="Dengue">Dengue</option>
+              <option value="COVID-19">COVID-19</option>
+              <option value="Influenza">Influenza</option>
             </select>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label htmlFor="viewType" className="block text-sm font-medium text-gray-700 mb-1">
+              Nivel de Análisis
+            </label>
+            <select
+              id="viewType"
+              value={viewType}
+              onChange={(e) => setViewType(e.target.value)}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="state">Estatal</option>
+              <option value="municipality">Municipal</option>
+              <option value="district">Distrital</option>
+            </select>
+          </div>
+
+          {viewType === 'municipality' && (
+            <div>
+              <label htmlFor="municipality" className="block text-sm font-medium text-gray-700 mb-1">
+                Municipio
+              </label>
+              <select
+                id="municipality"
+                value={selectedMunicipality}
+                onChange={(e) => setSelectedMunicipality(e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">Todos los municipios</option>
+                {municipalityData.map(municipality => (
+                  <option key={municipality.id} value={municipality.id}>
+                    {municipality.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {viewType === 'district' && (
+            <div>
+              <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">
+                Distrito
+              </label>
+              <select
+                id="district"
+                value={selectedDistrict}
+                onChange={(e) => setSelectedDistrict(e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">Todos los distritos</option>
+                {districtData.map(district => (
+                  <option key={district.id} value={district.id}>
+                    {district.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
         <div className="mt-4 flex justify-end">
           <button
             type="button"
@@ -104,29 +166,11 @@ const AnalystDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 gap-6 mb-6">
         <ChartCard 
-          title="Distribución por Diagnóstico" 
-          type="pie" 
-          data={diagnosisData} 
-        />
-        <ChartCard 
-          title="Tendencia Temporal de Casos" 
+          title="Tendencia Temporal por Semana Epidemiológica" 
           type="line" 
-          data={timeSeriesData} 
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <ChartCard 
-          title="Factores de Riesgo en Pacientes" 
-          type="bar" 
-          data={riskFactorsData} 
-        />
-        <ChartCard 
-          title="Casos por Municipio" 
-          type="bar" 
-          data={municipalityData} 
+          data={timeSeriesByDiagnosis[selectedDiagnosis] || timeSeriesByDiagnosis['Dengue']} 
         />
       </div>
 
@@ -134,37 +178,33 @@ const AnalystDashboard: React.FC = () => {
         <h3 className="text-lg font-medium text-gray-800 mb-4">Estadísticas Descriptivas</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-700 mb-2">Edad</h4>
+            <h4 className="font-medium text-gray-700 mb-2">Casos por Semana</h4>
             <ul className="space-y-2">
               <li className="flex justify-between">
-                <span className="text-gray-600">Media:</span>
-                <span className="font-medium">42.3 años</span>
+                <span className="text-gray-600">Promedio:</span>
+                <span className="font-medium">14.8 casos</span>
               </li>
               <li className="flex justify-between">
-                <span className="text-gray-600">Mediana:</span>
-                <span className="font-medium">39 años</span>
+                <span className="text-gray-600">Máximo:</span>
+                <span className="font-medium">25 casos</span>
               </li>
               <li className="flex justify-between">
-                <span className="text-gray-600">Moda:</span>
-                <span className="font-medium">35 años</span>
-              </li>
-              <li className="flex justify-between">
-                <span className="text-gray-600">Desv. Estándar:</span>
-                <span className="font-medium">12.7 años</span>
+                <span className="text-gray-600">Mínimo:</span>
+                <span className="font-medium">8 casos</span>
               </li>
             </ul>
           </div>
           
           <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-700 mb-2">Distribución por Sexo</h4>
+            <h4 className="font-medium text-gray-700 mb-2">Distribución Geográfica</h4>
             <ul className="space-y-2">
               <li className="flex justify-between">
-                <span className="text-gray-600">Masculino:</span>
-                <span className="font-medium">43% (54)</span>
+                <span className="text-gray-600">Municipio más afectado:</span>
+                <span className="font-medium">Hermosillo</span>
               </li>
               <li className="flex justify-between">
-                <span className="text-gray-600">Femenino:</span>
-                <span className="font-medium">57% (71)</span>
+                <span className="text-gray-600">Distrito más afectado:</span>
+                <span className="font-medium">Distrito 2</span>
               </li>
             </ul>
           </div>
@@ -173,16 +213,12 @@ const AnalystDashboard: React.FC = () => {
             <h4 className="font-medium text-gray-700 mb-2">Indicadores</h4>
             <ul className="space-y-2">
               <li className="flex justify-between">
-                <span className="text-gray-600">Incidencia:</span>
-                <span className="font-medium">23.5 por 100,000</span>
+                <span className="text-gray-600">Tasa de crecimiento:</span>
+                <span className="font-medium">+5.2%</span>
               </li>
               <li className="flex justify-between">
-                <span className="text-gray-600">Prevalencia:</span>
-                <span className="font-medium">42.1 por 100,000</span>
-              </li>
-              <li className="flex justify-between">
-                <span className="text-gray-600">Razón de Morbilidad:</span>
-                <span className="font-medium">3.2 por 1,000</span>
+                <span className="text-gray-600">Variación semanal:</span>
+                <span className="font-medium">±3.8 casos</span>
               </li>
             </ul>
           </div>
