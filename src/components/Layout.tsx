@@ -10,7 +10,8 @@ import {
   PlusCircle,
   Activity,
   Menu,
-  X
+  X,
+  MapPin
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -86,15 +87,26 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             )}
 
             {(user?.rol === 'analista' || user?.rol === 'admin') && (
-              <li>
-                <button 
-                  onClick={() => navigate('/analyst')}
-                  className="flex items-center w-full px-4 py-2 text-white rounded-md hover:bg-blue-700"
-                >
-                  <BarChart3 className="h-5 w-5 mr-3" />
-                  <span>Análisis</span>
-                </button>
-              </li>
+              <>
+                <li>
+                  <button 
+                    onClick={() => navigate('/analyst')}
+                    className="flex items-center w-full px-4 py-2 text-white rounded-md hover:bg-blue-700"
+                  >
+                    <BarChart3 className="h-5 w-5 mr-3" />
+                    <span>Análisis</span>
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => navigate('/health-centers-map')}
+                    className="flex items-center w-full px-4 py-2 text-white rounded-md hover:bg-blue-700"
+                  >
+                    <MapPin className="h-5 w-5 mr-3" />
+                    <span>Mapa de Centros</span>
+                  </button>
+                </li>
+              </>
             )}
 
             {user?.rol === 'centro_salud' && (

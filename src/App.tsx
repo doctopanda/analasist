@@ -10,6 +10,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AnalystDashboard from './pages/AnalystDashboard';
 import HealthCenterDashboard from './pages/HealthCenterDashboard';
 import ReportForm from './pages/ReportForm';
+import HealthCentersPage from './pages/HealthCentersPage';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -36,6 +37,12 @@ function App() {
           <Route path="/health-center" element={
             <ProtectedRoute requiredRoles={['centro_salud']}>
               <HealthCenterDashboard />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/health-centers-map" element={
+            <ProtectedRoute requiredRoles={['admin', 'analista']}>
+              <HealthCentersPage />
             </ProtectedRoute>
           } />
           
