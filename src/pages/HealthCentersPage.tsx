@@ -16,13 +16,14 @@ const HealthCentersPage: React.FC = () => {
     setSuccess(null);
 
     try {
-      const excelUrl = 'http://gobi.salud.gob.mx/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
+      // Updated to use HTTPS URL to avoid mixed content issues
+      const excelUrl = 'https://gobi.salud.gob.mx/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
       const healthCenters = await ExcelService.downloadAndParseExcel(excelUrl);
       
       setCenters(healthCenters);
       setSuccess(`Se cargaron ${healthCenters.length} centros de salud de Sonora`);
     } catch (err) {
-      setError('Error al descargar o procesar el archivo Excel. Verifique la conexión a internet.');
+      setError('Error al descargar o procesar el archivo Excel. Verifique la conexión a internet o que el servidor esté disponible.');
       console.error('Error:', err);
     } finally {
       setLoading(false);
@@ -196,6 +197,18 @@ const HealthCentersPage: React.FC = () => {
             <li>• Los colores de los marcadores indican el tipo de establecimiento</li>
           </ul>
         </div>
+
+        {/* API Key Notice */}
+        {!import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY === 'YOUR_GOOGLE_MAPS_API_KEY_HERE' && (
+          <div className="bg-orange-50 border border-orange-200 rounded-md p-4">
+            <h3 className="text-sm font-medium text-orange-800 mb-2">
+              Configuración requerida:
+            </h3>
+            <p className="text-sm text-orange-700">
+              Para que el mapa funcione correctamente, necesita configurar una clave de API de Google Maps válida en el archivo .env
+            </p>
+          </div>
+        )}
       </div>
     </Layout>
   );
