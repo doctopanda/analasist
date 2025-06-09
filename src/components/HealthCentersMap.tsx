@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { Icon, LatLngBounds } from 'leaflet';
 import { MapPin, Search, Download, Upload, Hospital, Building2, Stethoscope, Truck } from 'lucide-react';
+import { ExcelService, HealthCenterData } from '../services/excelService';
 import 'leaflet/dist/leaflet.css';
 
 interface HealthCenter {
@@ -18,6 +19,8 @@ interface HealthCenter {
   lat: number;
   lng: number;
   codigo_establecimiento: string;
+  horario?: string;
+  clues?: string;
 }
 
 // Custom hook to fit map bounds to markers
@@ -223,7 +226,8 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
       filtered = filtered.filter(center =>
         center.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         center.direccion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        center.responsable?.toLowerCase().includes(searchTerm.toLowerCase())
+        center.responsable?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        center.clues?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -244,14 +248,13 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
 
     setLoading(true);
     try {
-      // Here you would process the Excel file
-      // For now, we'll simulate the process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      console.log('File uploaded:', file.name);
-      // onFileUpload?.(parsedCenters);
+      const healthCenters = await ExcelService.parseFileUpload(file);
+      setCenters(healthCenters);
+      setFilteredCenters(healthCenters);
+      onFileUpload?.(healthCenters);
     } catch (error) {
       console.error('Error processing file:', error);
+      alert('Error al procesar el archivo Excel. Verifique que el formato sea correcto.');
     } finally {
       setLoading(false);
     }
@@ -265,7 +268,7 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
 
     // Create CSV content
     const csvContent = [
-      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,Latitud,Longitud',
+      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Horario,Latitud,Longitud',
       ...centers.map(center => [
         center.id,
         `"${center.nombre}"`,
@@ -278,6 +281,8 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
         center.email || '',
         `"${center.responsable || ''}"`,
         center.codigo_establecimiento,
+        center.clues || '',
+        `"${center.horario || ''}"`,
         center.lat,
         center.lng
       ].join(','))
@@ -451,8 +456,14 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
                     <p className="text-sm mb-1"><strong>Dirección:</strong> {center.direccion}</p>
                     <p className="text-sm mb-1"><strong>Municipio:</strong> {center.municipio}</p>
                     <p className="text-sm mb-1"><strong>Distrito:</strong> {center.distrito}</p>
+                    {center.clues && (
+                      <p className="text-sm mb-1"><strong>CLUES:</strong> {center.clues}</p>
+                    )}
                     {center.telefono && (
                       <p className="text-sm mb-1"><strong>Teléfono:</strong> {center.telefono}</p>
+                    )}
+                    {center.horario && (
+                      <p className="text-sm mb-1"><strong>Horario:</strong> {center.horario}</p>
                     )}
                     {center.responsable && (
                       <p className="text-sm"><strong>Responsable:</strong> {center.responsable}</p>
@@ -483,6 +494,9 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
                     </h5>
                     <p className="text-xs text-gray-600">{center.tipo}</p>
                     <p className="text-xs text-gray-500">{center.municipio}</p>
+                    {center.clues && (
+                      <p className="text-xs text-gray-500">CLUES: {center.clues}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -500,12 +514,18 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
               <p className="text-sm"><strong>Tipo:</strong> {selectedCenter.tipo}</p>
               <p className="text-sm"><strong>Dirección:</strong> {selectedCenter.direccion}</p>
               <p className="text-sm"><strong>Municipio:</strong> {selectedCenter.municipio}</p>
+              {selectedCenter.clues && (
+                <p className="text-sm"><strong>CLUES:</strong> {selectedCenter.clues}</p>
+              )}
             </div>
             <div>
               <p className="text-sm"><strong>Distrito:</strong> {selectedCenter.distrito}</p>
               <p className="text-sm"><strong>Código:</strong> {selectedCenter.codigo_establecimiento}</p>
               {selectedCenter.telefono && (
                 <p className="text-sm"><strong>Teléfono:</strong> {selectedCenter.telefono}</p>
+              )}
+              {selectedCenter.horario && (
+                <p className="text-sm"><strong>Horario:</strong> {selectedCenter.horario}</p>
               )}
               {selectedCenter.responsable && (
                 <p className="text-sm"><strong>Responsable:</strong> {selectedCenter.responsable}</p>
