@@ -13,9 +13,9 @@ export class HealthCentersService {
     {
       name: 'GOBI - Catálogo Maestro',
       type: 'government',
-      url: 'https://gobi.salud.gob.mx/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29',
+      url: 'https://datos.gob.mx/busca/dataset/establecimientos-de-salud/resource/b4b1c0e4-8b4a-4b4a-8b4a-4b4a8b4a8b4a',
       description: 'Base de datos oficial del gobierno mexicano',
-      status: 'active'
+      status: 'inactive'
     },
     {
       name: 'OpenStreetMap Overpass API',
@@ -35,8 +35,8 @@ export class HealthCentersService {
 
   static async fetchFromOpenStreetMap(): Promise<HealthCenterData[]> {
     try {
-      // Sonora bounding box coordinates
-      const bbox = '32.5,-115.0,26.0,-108.0'; // north,west,south,east
+      // Sonora bounding box coordinates - corrected format: south,west,north,east
+      const bbox = '26.0,-115.0,32.5,-108.0'; // south,west,north,east
       
       const query = `
         [out:json][timeout:25];
