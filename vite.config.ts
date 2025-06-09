@@ -7,14 +7,4 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
-  server: {
-    proxy: {
-      '/gobi': {
-        target: 'https://gobi.salud.gob.mx',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/gobi/, '/gobi')
-      }
-    }
-  }
 });
