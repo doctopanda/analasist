@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import HealthCentersMap from '../components/HealthCentersMap';
+import GeolocationValidator from '../components/GeolocationValidator';
 import { ExcelService, HealthCenterData } from '../services/excelService';
 import { HealthCentersService, DataSource } from '../services/healthCentersService';
 import { useData } from '../contexts/DataContext';
-import { AlertCircle, CheckCircle, Download, RefreshCw, Info, Database, Globe, Building2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, RefreshCw, Info, Database, Globe, Building2, MapPin } from 'lucide-react';
 
 const HealthCentersPage: React.FC = () => {
   const { healthCenters, addHealthCenters, setHealthCenters, loading, setLoading } = useData();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
+  const [activeTab, setActiveTab] = useState<'map' | 'validation'>('map');
   const [dataStats, setDataStats] = useState<{
     gobi: number;
     osm: number;
@@ -122,7 +124,7 @@ const HealthCentersPage: React.FC = () => {
     }
 
     const csvContent = [
-      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Latitud,Longitud,Fuente',
+      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Latitud,Longitud,Precisión,Fuente,Fuente',
       ...healthCenters.map(center => [
         center.id,
         `"${center.nombre}"`,
@@ -138,6 +140,8 @@ const HealthCentersPage: React.FC = () => {
         center.clues || '',
         center.lat,
         center.lng,
+        (center as any).geolocation_accuracy || 'unknown',
+        (center as any).geolocation_source || 'unknown',
         center.id.startsWith('osm_') ? 'OpenStreetMap' : 'GOBI'
       ].join(','))
     ].join('\n');
@@ -154,6 +158,11 @@ const HealthCentersPage: React.FC = () => {
     URL.revokeObjectURL(url);
 
     setSuccess('Datos exportados correctamente');
+  };
+
+  const handleCentersUpdated = (updatedCenters: HealthCenterData[]) => {
+    setHealthCenters(updatedCenters);
+    setSuccess('Coordenadas actualizadas correctamente');
   };
 
   return (
@@ -310,12 +319,58 @@ const HealthCentersPage: React.FC = () => {
           )}
         </div>
 
-        {/* Map Component */}
-        <HealthCentersMap 
-          centers={healthCenters} 
-          onFileUpload={handleFileUpload}
-          onExportData={handleExportData}
-        />
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex">
+              <button
+                onClick={() => setActiveTab('map')}
+                className={`py-4 px-6 text-sm font-medium border-b-2 ${
+                  activeTab === 'map'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center">
+                  <Building2 className="h-5 w-5 mr-2" />
+                  Mapa de Centros
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('validation')}
+                className={`py-4 px-6 text-sm font-medium border-b-2 ${
+                  activeTab === 'validation'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center">
+                  <MapPin className="h-5 w-5 mr-2" />
+                  Validación de Coordenadas
+                </div>
+              </button>
+            </nav>
+          </div>
+
+          <div className="p-0">
+            {activeTab === 'map' && (
+              <HealthCentersMap 
+                centers={healthCenters} 
+                onFileUpload={handleFileUpload}
+                onExportData={handleExportData}
+              />
+            )}
+            
+            {activeTab === 'validation' && (
+              <div className="p-6">
+                <GeolocationValidator 
+                  centers={healthCenters}
+                  onCentersUpdated={handleCentersUpdated}
+                />
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Data Sources Information */}
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
@@ -326,6 +381,7 @@ const HealthCentersPage: React.FC = () => {
             <li>• <strong>GOBI:</strong> Base de datos oficial del gobierno mexicano con establecimientos registrados</li>
             <li>• <strong>OpenStreetMap:</strong> Datos colaborativos que incluyen establecimientos públicos y privados</li>
             <li>• <strong>Combinar Fuentes:</strong> Integra ambas fuentes eliminando duplicados por proximidad geográfica</li>
+            <li>• <strong>Validación de Coordenadas:</strong> Verifica la precisión geográfica y corrige ubicaciones incorrectas</li>
             <li>• Los datos de OSM pueden incluir consultorios privados, farmacias y clínicas no registradas oficialmente</li>
           </ul>
         </div>
@@ -340,6 +396,7 @@ const HealthCentersPage: React.FC = () => {
             <li>• <strong>OpenStreetMap:</strong> Incluye establecimientos privados y datos colaborativos</li>
             <li>• <strong>Combinar Fuentes:</strong> Obtiene la vista más completa eliminando duplicados</li>
             <li>• <strong>Cargar Excel:</strong> Sube archivos Excel locales que se agregan a la base de datos</li>
+            <li>• <strong>Validación:</strong> Use la pestaña de validación para verificar y corregir coordenadas</li>
             <li>• <strong>Persistencia:</strong> Todos los datos se guardan automáticamente en el navegador</li>
             <li>• Use los filtros para buscar centros específicos por nombre, municipio o tipo</li>
             <li>• Exporte los datos combinados para análisis adicional</li>
