@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { HealthCentersProvider } from './contexts/HealthCentersContext';
+import { DataProvider } from './contexts/DataContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Pages
@@ -23,7 +23,7 @@ import AlertsManagement from './pages/AlertsManagement';
 function App() {
   return (
     <AuthProvider>
-      <HealthCentersProvider>
+      <DataProvider>
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -88,7 +88,7 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Router>
-      </HealthCentersProvider>
+      </DataProvider>
     </AuthProvider>
   );
 }

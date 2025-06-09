@@ -1,194 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import { useData } from '../contexts/DataContext';
 import { ArrowLeft, Edit, Trash2, UserPlus, Eye, EyeOff } from 'lucide-react';
-
-interface User {
-  id: number;
-  username: string;
-  rol: string;
-  centro_salud_id?: number;
-  centro_salud_nombre?: string;
-  distrito?: string;
-  fecha_registro: string;
-  ultima_participacion: string;
-  estado: 'activo' | 'inactivo';
-}
-
-const mockUsers: User[] = [
-  {
-    id: 1,
-    username: 'admin',
-    rol: 'admin',
-    fecha_registro: '2024-01-15',
-    ultima_participacion: '2025-01-15',
-    estado: 'activo'
-  },
-  {
-    id: 2,
-    username: 'analista1',
-    rol: 'analista',
-    fecha_registro: '2024-02-20',
-    ultima_participacion: '2025-01-14',
-    estado: 'activo'
-  },
-  {
-    id: 3,
-    username: 'analista2',
-    rol: 'analista',
-    fecha_registro: '2024-03-10',
-    ultima_participacion: '2025-01-10',
-    estado: 'activo'
-  },
-  {
-    id: 4,
-    username: 'hospital1',
-    rol: 'centro_salud',
-    centro_salud_id: 1,
-    centro_salud_nombre: 'Hospital General del Estado de Sonora',
-    distrito: 'Distrito 1',
-    fecha_registro: '2024-04-05',
-    ultima_participacion: '2025-01-15',
-    estado: 'activo'
-  },
-  {
-    id: 5,
-    username: 'centro_hermosillo',
-    rol: 'centro_salud',
-    centro_salud_id: 2,
-    centro_salud_nombre: 'Centro de Salud Urbano Villa de Seris',
-    distrito: 'Distrito 1',
-    fecha_registro: '2024-04-12',
-    ultima_participacion: '2025-01-13',
-    estado: 'activo'
-  },
-  {
-    id: 6,
-    username: 'hospital_cajeme',
-    rol: 'centro_salud',
-    centro_salud_id: 3,
-    centro_salud_nombre: 'Hospital General de Cajeme',
-    distrito: 'Distrito 2',
-    fecha_registro: '2024-05-01',
-    ultima_participacion: '2025-01-12',
-    estado: 'activo'
-  },
-  {
-    id: 7,
-    username: 'centro_nogales',
-    rol: 'centro_salud',
-    centro_salud_id: 4,
-    centro_salud_nombre: 'Centro de Salud Nogales',
-    distrito: 'Distrito 3',
-    fecha_registro: '2024-05-15',
-    ultima_participacion: '2025-01-11',
-    estado: 'activo'
-  },
-  {
-    id: 8,
-    username: 'hospital_slrc',
-    rol: 'centro_salud',
-    centro_salud_id: 5,
-    centro_salud_nombre: 'Hospital General San Luis Río Colorado',
-    distrito: 'Distrito 4',
-    fecha_registro: '2024-06-01',
-    ultima_participacion: '2025-01-09',
-    estado: 'activo'
-  },
-  {
-    id: 9,
-    username: 'centro_guaymas',
-    rol: 'centro_salud',
-    centro_salud_id: 6,
-    centro_salud_nombre: 'Centro de Salud Guaymas',
-    distrito: 'Distrito 2',
-    fecha_registro: '2024-06-15',
-    ultima_participacion: '2025-01-08',
-    estado: 'activo'
-  },
-  {
-    id: 10,
-    username: 'clinica_navojoa',
-    rol: 'centro_salud',
-    centro_salud_id: 7,
-    centro_salud_nombre: 'Clínica del IMSS Navojoa',
-    distrito: 'Distrito 2',
-    fecha_registro: '2024-07-01',
-    ultima_participacion: '2025-01-07',
-    estado: 'activo'
-  },
-  {
-    id: 11,
-    username: 'analista3',
-    rol: 'analista',
-    fecha_registro: '2024-08-01',
-    ultima_participacion: '2024-12-15',
-    estado: 'inactivo'
-  },
-  {
-    id: 12,
-    username: 'centro_agua_prieta',
-    rol: 'centro_salud',
-    centro_salud_id: 8,
-    centro_salud_nombre: 'Centro de Salud Agua Prieta',
-    distrito: 'Distrito 3',
-    fecha_registro: '2024-08-15',
-    ultima_participacion: '2025-01-06',
-    estado: 'activo'
-  },
-  {
-    id: 13,
-    username: 'hospital_puerto_penasco',
-    rol: 'centro_salud',
-    centro_salud_id: 9,
-    centro_salud_nombre: 'Hospital General Puerto Peñasco',
-    distrito: 'Distrito 4',
-    fecha_registro: '2024-09-01',
-    ultima_participacion: '2025-01-05',
-    estado: 'activo'
-  },
-  {
-    id: 14,
-    username: 'centro_caborca',
-    rol: 'centro_salud',
-    centro_salud_id: 10,
-    centro_salud_nombre: 'Centro de Salud Caborca',
-    distrito: 'Distrito 4',
-    fecha_registro: '2024-09-15',
-    ultima_participacion: '2025-01-04',
-    estado: 'activo'
-  },
-  {
-    id: 15,
-    username: 'centro_cananea',
-    rol: 'centro_salud',
-    centro_salud_id: 11,
-    centro_salud_nombre: 'Centro de Salud Cananea',
-    distrito: 'Distrito 5',
-    fecha_registro: '2024-10-01',
-    ultima_participacion: '2025-01-03',
-    estado: 'activo'
-  },
-  {
-    id: 16,
-    username: 'centro_magdalena',
-    rol: 'centro_salud',
-    centro_salud_id: 12,
-    centro_salud_nombre: 'Centro de Salud Magdalena',
-    distrito: 'Distrito 3',
-    fecha_registro: '2024-10-15',
-    ultima_participacion: '2025-01-02',
-    estado: 'activo'
-  }
-];
 
 const UsersManagement: React.FC = () => {
   const navigate = useNavigate();
-  const [users] = useState<User[]>(mockUsers);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>(mockUsers);
+  const { users, updateUser, deleteUser } = useData();
+  const [filteredUsers, setFilteredUsers] = useState(users);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+
+  React.useEffect(() => {
+    setFilteredUsers(users);
+  }, [users]);
 
   React.useEffect(() => {
     let filtered = users;
@@ -245,19 +71,22 @@ const UsersManagement: React.FC = () => {
   };
 
   const toggleUserStatus = (userId: number) => {
-    // In a real app, this would make an API call
-    console.log(`Toggle status for user ${userId}`);
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      updateUser(userId, { 
+        estado: user.estado === 'activo' ? 'inactivo' : 'activo' 
+      });
+    }
   };
 
   const editUser = (userId: number) => {
-    // In a real app, this would open an edit modal or navigate to edit page
     console.log(`Edit user ${userId}`);
+    // In a real app, this would open an edit modal
   };
 
-  const deleteUser = (userId: number) => {
-    // In a real app, this would show a confirmation dialog and make an API call
+  const handleDeleteUser = (userId: number) => {
     if (confirm('¿Está seguro de que desea eliminar este usuario?')) {
-      console.log(`Delete user ${userId}`);
+      deleteUser(userId);
     }
   };
 
@@ -439,7 +268,7 @@ const UsersManagement: React.FC = () => {
                           {user.estado === 'activo' ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                         <button
-                          onClick={() => deleteUser(user.id)}
+                          onClick={() => handleDeleteUser(user.id)}
                           className="text-red-600 hover:text-red-900"
                           title="Eliminar usuario"
                         >

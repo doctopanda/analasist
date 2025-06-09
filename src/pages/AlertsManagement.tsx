@@ -1,110 +1,22 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import { useData } from '../contexts/DataContext';
 import { ArrowLeft, AlertTriangle, MapPin, Calendar, TrendingUp, Eye, CheckCircle, X } from 'lucide-react';
-
-interface Alert {
-  id: number;
-  tipo: 'brote' | 'incremento' | 'cluster' | 'anomalia';
-  titulo: string;
-  descripcion: string;
-  municipio: string;
-  distrito: string;
-  diagnostico: string;
-  casos_detectados: number;
-  fecha_deteccion: string;
-  coordenadas: { lat: number; lng: number };
-  severidad: 'baja' | 'media' | 'alta' | 'critica';
-  estado: 'activa' | 'investigando' | 'resuelta' | 'descartada';
-  acciones_tomadas?: string;
-}
-
-const mockAlerts: Alert[] = [
-  {
-    id: 1,
-    tipo: 'brote',
-    titulo: 'Posible brote de Dengue en Hermosillo',
-    descripcion: 'Se han detectado 8 casos de dengue en un radio de 2km en la colonia Villa de Seris en los últimos 7 días.',
-    municipio: 'Hermosillo',
-    distrito: 'Distrito 1',
-    diagnostico: 'Dengue',
-    casos_detectados: 8,
-    fecha_deteccion: '2025-01-15',
-    coordenadas: { lat: 29.0892, lng: -110.9618 },
-    severidad: 'alta',
-    estado: 'activa',
-    acciones_tomadas: 'Equipo de epidemiología enviado para investigación de campo'
-  },
-  {
-    id: 2,
-    tipo: 'incremento',
-    titulo: 'Incremento de casos de COVID-19 en Cajeme',
-    descripcion: 'Aumento del 40% en casos de COVID-19 comparado con la semana anterior.',
-    municipio: 'Cajeme',
-    distrito: 'Distrito 2',
-    diagnostico: 'COVID-19',
-    casos_detectados: 12,
-    fecha_deteccion: '2025-01-14',
-    coordenadas: { lat: 27.3833, lng: -109.9167 },
-    severidad: 'media',
-    estado: 'investigando',
-    acciones_tomadas: 'Refuerzo de medidas preventivas en centros de salud'
-  },
-  {
-    id: 3,
-    tipo: 'cluster',
-    titulo: 'Cluster de Influenza en Puerto Peñasco',
-    descripcion: 'Agrupación de 6 casos de influenza en trabajadores del sector turístico.',
-    municipio: 'Puerto Peñasco',
-    distrito: 'Distrito 4',
-    diagnostico: 'Influenza',
-    casos_detectados: 6,
-    fecha_deteccion: '2025-01-13',
-    coordenadas: { lat: 31.3167, lng: -113.5333 },
-    severidad: 'media',
-    estado: 'activa',
-    acciones_tomadas: 'Campaña de vacunación dirigida al sector turístico'
-  },
-  {
-    id: 4,
-    tipo: 'anomalia',
-    titulo: 'Patrón inusual de Zika en Navojoa',
-    descripcion: 'Casos de Zika fuera de la temporada típica de transmisión.',
-    municipio: 'Navojoa',
-    distrito: 'Distrito 2',
-    diagnostico: 'Zika',
-    casos_detectados: 3,
-    fecha_deteccion: '2025-01-12',
-    coordenadas: { lat: 27.0667, lng: -109.4333 },
-    severidad: 'baja',
-    estado: 'investigando'
-  },
-  {
-    id: 5,
-    tipo: 'brote',
-    titulo: 'Brote de Chikungunya en Nogales',
-    descripcion: 'Confirmación de brote con 5 casos relacionados epidemiológicamente.',
-    municipio: 'Nogales',
-    distrito: 'Distrito 3',
-    diagnostico: 'Chikungunya',
-    casos_detectados: 5,
-    fecha_deteccion: '2025-01-10',
-    coordenadas: { lat: 31.3081, lng: -110.9342 },
-    severidad: 'alta',
-    estado: 'resuelta',
-    acciones_tomadas: 'Control vectorial intensivo completado, casos aislados y tratados'
-  }
-];
 
 const AlertsManagement: React.FC = () => {
   const navigate = useNavigate();
-  const [alerts] = useState<Alert[]>(mockAlerts);
-  const [filteredAlerts, setFilteredAlerts] = useState<Alert[]>(mockAlerts);
+  const { alerts, updateAlert } = useData();
+  const [filteredAlerts, setFilteredAlerts] = useState(alerts);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<any>(null);
+
+  React.useEffect(() => {
+    setFilteredAlerts(alerts);
+  }, [alerts]);
 
   React.useEffect(() => {
     let filtered = alerts;
@@ -198,16 +110,16 @@ const AlertsManagement: React.FC = () => {
     );
   };
 
-  const viewAlert = (alert: Alert) => {
+  const viewAlert = (alert: any) => {
     setSelectedAlert(alert);
   };
 
   const resolveAlert = (alertId: number) => {
-    console.log(`Resolve alert ${alertId}`);
+    updateAlert(alertId, { estado: 'resuelta' });
   };
 
   const dismissAlert = (alertId: number) => {
-    console.log(`Dismiss alert ${alertId}`);
+    updateAlert(alertId, { estado: 'descartada' });
   };
 
   const stats = {
@@ -411,6 +323,7 @@ const AlertsManagement: React.FC = () => {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
+                        
                         {alert.estado === 'activa' && (
                           <>
                             <button

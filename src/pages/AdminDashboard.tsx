@@ -3,26 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
+import { useData } from '../contexts/DataContext';
 import { Users, Building2, FileText, AlertTriangle, Mail, Upload, Download, PlusCircle } from 'lucide-react';
-
-// Mock data
-const usersByRole = [
-  { name: 'Administradores', value: 1 },
-  { name: 'Analistas', value: 3 },
-  { name: 'Centros de Salud', value: 12 }
-];
-
-const reportsByMonth = [
-  { name: 'Ene', value: 45 },
-  { name: 'Feb', value: 52 },
-  { name: 'Mar', value: 49 },
-  { name: 'Abr', value: 63 },
-  { name: 'May', value: 58 },
-  { name: 'Jun', value: 64 }
-];
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { getStatistics, users, reports, alerts, healthCenters } = useData();
   const [showUserModal, setShowUserModal] = useState(false);
   const [showCenterModal, setShowCenterModal] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -43,6 +29,38 @@ const AdminDashboard: React.FC = () => {
     email: '',
     responsable: ''
   });
+
+  const stats = getStatistics();
+
+  // Generate chart data from real data
+  const usersByRole = [
+    { name: 'Administradores', value: users.filter(u => u.rol === 'admin').length },
+    { name: 'Analistas', value: users.filter(u => u.rol === 'analista').length },
+    { name: 'Centros de Salud', value: users.filter(u => u.rol === 'centro_salud').length }
+  ];
+
+  const reportsByMonth = [
+    { name: 'Ene', value: reports.filter(r => r.fecha_subida.includes('2025-01')).length },
+    { name: 'Feb', value: reports.filter(r => r.fecha_subida.includes('2025-02')).length },
+    { name: 'Mar', value: reports.filter(r => r.fecha_subida.includes('2025-03')).length },
+    { name: 'Abr', value: reports.filter(r => r.fecha_subida.includes('2025-04')).length },
+    { name: 'May', value: reports.filter(r => r.fecha_subida.includes('2025-05')).length },
+    { name: 'Jun', value: reports.filter(r => r.fecha_subida.includes('2025-06')).length }
+  ];
+
+  const centersByType = [
+    { name: 'Hospitales', value: healthCenters.filter(c => c.tipo === 'Hospital').length },
+    { name: 'Centros de Salud', value: healthCenters.filter(c => c.tipo === 'Centro de Salud').length },
+    { name: 'Clínicas', value: healthCenters.filter(c => c.tipo === 'Clínica').length },
+    { name: 'Otros', value: healthCenters.filter(c => !['Hospital', 'Centro de Salud', 'Clínica'].includes(c.tipo)).length }
+  ];
+
+  const alertsBySeverity = [
+    { name: 'Baja', value: alerts.filter(a => a.severidad === 'baja').length },
+    { name: 'Media', value: alerts.filter(a => a.severidad === 'media').length },
+    { name: 'Alta', value: alerts.filter(a => a.severidad === 'alta').length },
+    { name: 'Crítica', value: alerts.filter(a => a.severidad === 'critica').length }
+  ];
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,7 +133,7 @@ const AdminDashboard: React.FC = () => {
         <div onClick={() => handleStatCardClick('users')} className="cursor-pointer">
           <StatCard 
             title="Usuarios Totales" 
-            value={16} 
+            value={stats.totalUsers} 
             icon={Users} 
             color="bg-blue-600"
           />
@@ -123,7 +141,7 @@ const AdminDashboard: React.FC = () => {
         <div onClick={() => handleStatCardClick('centers')} className="cursor-pointer">
           <StatCard 
             title="Centros de Salud" 
-            value={12} 
+            value={stats.totalHealthCenters} 
             icon={Building2} 
             color="bg-green-600"
           />
@@ -131,7 +149,7 @@ const AdminDashboard: React.FC = () => {
         <div onClick={() => handleStatCardClick('reports')} className="cursor-pointer">
           <StatCard 
             title="Reportes Totales" 
-            value={331} 
+            value={stats.totalReports} 
             icon={FileText} 
             color="bg-amber-600"
           />
@@ -139,7 +157,7 @@ const AdminDashboard: React.FC = () => {
         <div onClick={() => handleStatCardClick('alerts')} className="cursor-pointer">
           <StatCard 
             title="Alertas Activas" 
-            value={3} 
+            value={stats.activeAlerts} 
             icon={AlertTriangle} 
             color="bg-red-600"
           />
@@ -370,8 +388,9 @@ const AdminDashboard: React.FC = () => {
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     >
                       <option value="">Seleccionar centro</option>
-                      <option value="1">Hospital General de Sonora</option>
-                      <option value="2">Centro de Salud Hermosillo</option>
+                      {healthCenters.map(center => (
+                        <option key={center.id} value={center.id}>{center.nombre}</option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -403,50 +422,57 @@ const AdminDashboard: React.FC = () => {
           data={usersByRole} 
         />
         <ChartCard 
+          title="Centros por Tipo" 
+          type="pie" 
+          data={centersByType} 
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <ChartCard 
           title="Reportes por Mes" 
           type="bar" 
           data={reportsByMonth} 
+        />
+        <ChartCard 
+          title="Alertas por Severidad" 
+          type="bar" 
+          data={alertsBySeverity} 
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Gestión de Usuarios</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                <tr>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">admin</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Administrador</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      Activo
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3">Editar</button>
-                    <button className="text-red-600 hover:text-red-900">Desactivar</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Resumen del Sistema</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Usuarios Activos:</span>
+              <span className="font-medium text-green-600">{stats.activeUsers}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Reportes Pendientes:</span>
+              <span className="font-medium text-yellow-600">{stats.pendingReports}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Alertas Críticas:</span>
+              <span className="font-medium text-red-600">{stats.criticalAlerts}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Centros Registrados:</span>
+              <span className="font-medium text-blue-600">{stats.totalHealthCenters}</span>
+            </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-medium text-gray-800 mb-4">Acciones Rápidas</h3>
           <div className="space-y-4">
-            <button className="w-full flex items-center px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200">
+            <button 
+              onClick={() => navigate('/health-centers-map')}
+              className="w-full flex items-center px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200"
+            >
               <Upload className="h-5 w-5 mr-3 text-gray-600" />
-              <span>Subir Boletín Informativo</span>
+              <span>Cargar Datos de Centros</span>
             </button>
             <button className="w-full flex items-center px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200">
               <Mail className="h-5 w-5 mr-3 text-gray-600"  />
@@ -461,35 +487,30 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-medium text-gray-800 mb-4">Centros de Salud Registrados</h3>
+        <h3 className="text-lg font-medium text-gray-800 mb-4">Actividad Reciente</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Municipio</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Distrito</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Hospital General de Sonora</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Hermosillo</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Distrito 1</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Hospital</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                    Activo
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <button className="text-blue-600 hover:text-blue-900 mr-3">Editar</button>
-                  <button className="text-red-600 hover:text-red-900">Desactivar</button>
-                </td>
-              </tr>
+              {reports.slice(0, 5).map((report) => (
+                <tr key={report.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Reporte</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    Nuevo reporte {report.folio} - {report.diagnostico}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{report.usuario_subida}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(report.fecha_subida).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

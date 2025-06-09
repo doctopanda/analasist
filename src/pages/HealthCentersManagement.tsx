@@ -1,24 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { useHealthCenters } from '../contexts/HealthCentersContext';
+import { useData } from '../contexts/DataContext';
 import { ArrowLeft, Edit, Trash2, Building2, MapPin, Clock, User, Shield, Plus } from 'lucide-react';
 
 const HealthCentersManagement: React.FC = () => {
   const navigate = useNavigate();
-  const { centers, updateCenter, deleteCenter } = useHealthCenters();
-  const [filteredCenters, setFilteredCenters] = useState(centers);
+  const { healthCenters, updateHealthCenter, deleteHealthCenter } = useData();
+  const [filteredCenters, setFilteredCenters] = useState(healthCenters);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterDistrict, setFilterDistrict] = useState('');
-  const [filterDerechohabiencia, setFilterDerechohabiencia] = useState('');
 
   React.useEffect(() => {
-    setFilteredCenters(centers);
-  }, [centers]);
+    setFilteredCenters(healthCenters);
+  }, [healthCenters]);
 
   React.useEffect(() => {
-    let filtered = centers;
+    let filtered = healthCenters;
 
     if (searchTerm) {
       filtered = filtered.filter(center =>
@@ -38,7 +37,7 @@ const HealthCentersManagement: React.FC = () => {
     }
 
     setFilteredCenters(filtered);
-  }, [centers, searchTerm, filterType, filterDistrict, filterDerechohabiencia]);
+  }, [healthCenters, searchTerm, filterType, filterDistrict]);
 
   const getTypeBadge = (tipo: string) => {
     const colors = {
@@ -64,20 +63,20 @@ const HealthCentersManagement: React.FC = () => {
 
   const handleDeleteCenter = (centerId: string) => {
     if (confirm('¿Está seguro de que desea eliminar este centro de salud?')) {
-      deleteCenter(centerId);
+      deleteHealthCenter(centerId);
     }
   };
 
   const stats = {
-    total: centers.length,
-    hospitales: centers.filter(c => c.tipo === 'Hospital').length,
-    centros: centers.filter(c => c.tipo === 'Centro de Salud').length,
-    clinicas: centers.filter(c => c.tipo === 'Clínica').length,
-    otros: centers.filter(c => !['Hospital', 'Centro de Salud', 'Clínica'].includes(c.tipo)).length
+    total: healthCenters.length,
+    hospitales: healthCenters.filter(c => c.tipo === 'Hospital').length,
+    centros: healthCenters.filter(c => c.tipo === 'Centro de Salud').length,
+    clinicas: healthCenters.filter(c => c.tipo === 'Clínica').length,
+    otros: healthCenters.filter(c => !['Hospital', 'Centro de Salud', 'Clínica'].includes(c.tipo)).length
   };
 
-  const districts = [...new Set(centers.map(c => c.distrito))].sort();
-  const types = [...new Set(centers.map(c => c.tipo))].sort();
+  const districts = [...new Set(healthCenters.map(c => c.distrito))].sort();
+  const types = [...new Set(healthCenters.map(c => c.tipo))].sort();
 
   return (
     <Layout title="Gestión de Centros de Salud">
@@ -279,7 +278,7 @@ const HealthCentersManagement: React.FC = () => {
           {filteredCenters.length === 0 && (
             <div className="text-center py-8">
               <div className="text-gray-500">
-                {centers.length === 0 
+                {healthCenters.length === 0 
                   ? 'No hay centros de salud cargados. Vaya a "Cargar Datos" para importar información.'
                   : 'No se encontraron centros de salud que coincidan con los filtros.'
                 }
@@ -289,7 +288,7 @@ const HealthCentersManagement: React.FC = () => {
         </div>
 
         {/* Information Panel */}
-        {centers.length > 0 && (
+        {healthCenters.length > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <h3 className="text-sm font-medium text-blue-800 mb-2">
               Información del Sistema:

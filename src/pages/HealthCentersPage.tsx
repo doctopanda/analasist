@@ -3,11 +3,11 @@ import Layout from '../components/Layout';
 import HealthCentersMap from '../components/HealthCentersMap';
 import { ExcelService, HealthCenterData } from '../services/excelService';
 import { HealthCentersService, DataSource } from '../services/healthCentersService';
-import { useHealthCenters } from '../contexts/HealthCentersContext';
+import { useData } from '../contexts/DataContext';
 import { AlertCircle, CheckCircle, Download, RefreshCw, Info, Database, Globe, Building2 } from 'lucide-react';
 
 const HealthCentersPage: React.FC = () => {
-  const { centers, addCenters, setCenters, loading, setLoading } = useHealthCenters();
+  const { healthCenters, addHealthCenters, setHealthCenters, loading, setLoading } = useData();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
@@ -15,12 +15,12 @@ const HealthCentersPage: React.FC = () => {
     gobi: number;
     osm: number;
     total: number;
-  }>({ gobi: 0, osm: 0, total: centers.length });
+  }>({ gobi: 0, osm: 0, total: healthCenters.length });
 
   useEffect(() => {
     setDataSources(HealthCentersService.getAvailableDataSources());
-    setDataStats(prev => ({ ...prev, total: centers.length }));
-  }, [centers.length]);
+    setDataStats(prev => ({ ...prev, total: healthCenters.length }));
+  }, [healthCenters.length]);
 
   const handleDownloadFromGOBI = async () => {
     setLoading(true);
@@ -37,7 +37,7 @@ const HealthCentersPage: React.FC = () => {
       const healthCenters = await ExcelService.downloadAndParseExcel(gobiDataSource.url);
       
       // Replace all centers with GOBI data
-      setCenters(healthCenters);
+      setHealthCenters(healthCenters);
       setDataStats(prev => ({ ...prev, gobi: healthCenters.length, total: healthCenters.length }));
       setSuccess(`Se cargaron ${healthCenters.length} centros de salud desde GOBI y se guardaron en el sistema`);
     } catch (err) {
@@ -57,7 +57,7 @@ const HealthCentersPage: React.FC = () => {
       const osmCenters = await HealthCentersService.fetchFromOpenStreetMap();
       
       // Replace all centers with OSM data
-      setCenters(osmCenters);
+      setHealthCenters(osmCenters);
       setDataStats(prev => ({ ...prev, osm: osmCenters.length, total: osmCenters.length }));
       setSuccess(`Se cargaron ${osmCenters.length} establecimientos desde OpenStreetMap y se guardaron en el sistema`);
     } catch (err) {
@@ -92,7 +92,7 @@ const HealthCentersPage: React.FC = () => {
         await HealthCentersService.removeDuplicates(allCenters) : allCenters;
 
       // Replace all centers with combined data
-      setCenters(uniqueCenters);
+      setHealthCenters(uniqueCenters);
       setDataStats({
         gobi: results.gobi.length,
         osm: results.osm.length,
@@ -110,20 +110,20 @@ const HealthCentersPage: React.FC = () => {
 
   const handleFileUpload = async (uploadedCenters: HealthCenterData[]) => {
     // Add uploaded centers to existing ones
-    addCenters(uploadedCenters);
-    setDataStats(prev => ({ ...prev, total: centers.length + uploadedCenters.length }));
+    addHealthCenters(uploadedCenters);
+    setDataStats(prev => ({ ...prev, total: healthCenters.length + uploadedCenters.length }));
     setSuccess(`Se cargaron ${uploadedCenters.length} centros de salud desde Excel y se guardaron en el sistema`);
   };
 
   const handleExportData = () => {
-    if (centers.length === 0) {
+    if (healthCenters.length === 0) {
       setError('No hay datos para exportar');
       return;
     }
 
     const csvContent = [
       'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Latitud,Longitud,Fuente',
-      ...centers.map(center => [
+      ...healthCenters.map(center => [
         center.id,
         `"${center.nombre}"`,
         `"${center.direccion}"`,
@@ -213,7 +213,7 @@ const HealthCentersPage: React.FC = () => {
               
               <button
                 onClick={handleExportData}
-                disabled={centers.length === 0}
+                disabled={healthCenters.length === 0}
                 className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Download className="h-5 w-5 mr-2" />
@@ -276,7 +276,7 @@ const HealthCentersPage: React.FC = () => {
           )}
 
           {/* Statistics */}
-          {centers.length > 0 && (
+          {healthCenters.length > 0 && (
             <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="bg-gray-50 p-3 rounded-md">
                 <p className="text-sm text-gray-600">Total Centros</p>
@@ -297,13 +297,13 @@ const HealthCentersPage: React.FC = () => {
               <div className="bg-gray-50 p-3 rounded-md">
                 <p className="text-sm text-gray-600">Municipios</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {new Set(centers.map(c => c.municipio)).size}
+                  {new Set(healthCenters.map(c => c.municipio)).size}
                 </p>
               </div>
               <div className="bg-gray-50 p-3 rounded-md">
                 <p className="text-sm text-gray-600">Tipos</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {new Set(centers.map(c => c.tipo)).size}
+                  {new Set(healthCenters.map(c => c.tipo)).size}
                 </p>
               </div>
             </div>
@@ -312,7 +312,7 @@ const HealthCentersPage: React.FC = () => {
 
         {/* Map Component */}
         <HealthCentersMap 
-          centers={centers} 
+          centers={healthCenters} 
           onFileUpload={handleFileUpload}
           onExportData={handleExportData}
         />
