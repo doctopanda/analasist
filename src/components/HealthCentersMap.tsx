@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Wrapper, Status } from '@googlemaps/react-wrapper';
-import { MapPin, Search, Filter, Download, Upload } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { Icon, LatLngBounds } from 'leaflet';
+import { MapPin, Search, Download, Upload, Hospital, Building2, Stethoscope, Truck } from 'lucide-react';
+import 'leaflet/dist/leaflet.css';
 
 interface HealthCenter {
   id: string;
@@ -18,139 +20,68 @@ interface HealthCenter {
   codigo_establecimiento: string;
 }
 
-interface MapProps {
-  centers: HealthCenter[];
-  selectedCenter: HealthCenter | null;
-  onCenterSelect: (center: HealthCenter | null) => void;
-}
-
-const Map: React.FC<MapProps> = ({ centers, selectedCenter, onCenterSelect }) => {
-  const [map, setMap] = useState<google.maps.Map>();
-  const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
-
-  const ref = useCallback((node: HTMLDivElement | null) => {
-    if (node !== null) {
-      const newMap = new google.maps.Map(node, {
-        center: { lat: 29.0729, lng: -110.9559 }, // Hermosillo, Sonora
-        zoom: 7,
-        mapTypeId: 'roadmap',
-        styles: [
-          {
-            featureType: 'poi',
-            elementType: 'labels',
-            stylers: [{ visibility: 'off' }]
-          }
-        ]
-      });
-      setMap(newMap);
-    }
-  }, []);
+// Custom hook to fit map bounds to markers
+const FitBounds: React.FC<{ centers: HealthCenter[] }> = ({ centers }) => {
+  const map = useMap();
 
   useEffect(() => {
-    if (!map) return;
-
-    // Clear existing markers
-    markers.forEach(marker => marker.setMap(null));
-
-    // Create new markers
-    const newMarkers = centers.map(center => {
-      const marker = new google.maps.Marker({
-        position: { lat: center.lat, lng: center.lng },
-        map,
-        title: center.nombre,
-        icon: {
-          url: getMarkerIcon(center.tipo),
-          scaledSize: new google.maps.Size(32, 32)
-        }
-      });
-
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div class="p-3 max-w-sm">
-            <h3 class="font-bold text-lg text-blue-800">${center.nombre}</h3>
-            <p class="text-sm text-gray-600 mb-2">${center.tipo}</p>
-            <p class="text-sm"><strong>Dirección:</strong> ${center.direccion}</p>
-            <p class="text-sm"><strong>Municipio:</strong> ${center.municipio}</p>
-            <p class="text-sm"><strong>Distrito:</strong> ${center.distrito}</p>
-            ${center.telefono ? `<p class="text-sm"><strong>Teléfono:</strong> ${center.telefono}</p>` : ''}
-            ${center.responsable ? `<p class="text-sm"><strong>Responsable:</strong> ${center.responsable}</p>` : ''}
-          </div>
-        `
-      });
-
-      marker.addListener('click', () => {
-        onCenterSelect(center);
-        infoWindow.open(map, marker);
-      });
-
-      return marker;
-    });
-
-    setMarkers(newMarkers);
-
-    // Adjust map bounds to show all markers
     if (centers.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      centers.forEach(center => {
-        bounds.extend({ lat: center.lat, lng: center.lng });
-      });
-      map.fitBounds(bounds);
+      const bounds = new LatLngBounds(
+        centers.map(center => [center.lat, center.lng])
+      );
+      map.fitBounds(bounds, { padding: [20, 20] });
     }
-  }, [map, centers, onCenterSelect]);
+  }, [centers, map]);
 
-  // Highlight selected center
+  return null;
+};
+
+// Custom hook to handle center selection
+const CenterSelector: React.FC<{ 
+  selectedCenter: HealthCenter | null;
+}> = ({ selectedCenter }) => {
+  const map = useMap();
+
   useEffect(() => {
-    if (!selectedCenter || !map) return;
-
-    const selectedMarker = markers.find(marker => 
-      marker.getTitle() === selectedCenter.nombre
-    );
-
-    if (selectedMarker) {
-      map.panTo({ lat: selectedCenter.lat, lng: selectedCenter.lng });
-      map.setZoom(12);
+    if (selectedCenter) {
+      map.setView([selectedCenter.lat, selectedCenter.lng], 12);
     }
-  }, [selectedCenter, map, markers]);
+  }, [selectedCenter, map]);
 
-  return <div ref={ref} className="w-full h-full" />;
+  return null;
 };
 
-const getMarkerIcon = (tipo: string): string => {
-  const baseUrl = 'https://maps.google.com/mapfiles/ms/icons/';
-  switch (tipo.toLowerCase()) {
-    case 'hospital':
-      return `${baseUrl}red-dot.png`;
-    case 'centro de salud':
-      return `${baseUrl}blue-dot.png`;
-    case 'clínica':
-      return `${baseUrl}green-dot.png`;
-    case 'unidad móvil':
-      return `${baseUrl}yellow-dot.png`;
-    default:
-      return `${baseUrl}purple-dot.png`;
-  }
-};
+// Create custom icons for different types of health centers
+const createCustomIcon = (tipo: string, isSelected: boolean = false) => {
+  const getIconColor = (tipo: string) => {
+    switch (tipo.toLowerCase()) {
+      case 'hospital':
+        return '#dc2626'; // red-600
+      case 'centro de salud':
+        return '#2563eb'; // blue-600
+      case 'clínica':
+        return '#16a34a'; // green-600
+      case 'unidad móvil':
+        return '#ca8a04'; // yellow-600
+      default:
+        return '#7c3aed'; // purple-600
+    }
+  };
 
-const render = (status: Status) => {
-  switch (status) {
-    case Status.LOADING:
-      return (
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      );
-    case Status.FAILURE:
-      return (
-        <div className="flex items-center justify-center h-96 bg-red-50">
-          <div className="text-center">
-            <p className="text-red-600 font-medium">Error al cargar Google Maps</p>
-            <p className="text-red-500 text-sm">Verifique la clave de API</p>
-          </div>
-        </div>
-      );
-    default:
-      return null;
-  }
+  const color = getIconColor(tipo);
+  const size = isSelected ? 35 : 25;
+  
+  return new Icon({
+    iconUrl: `data:image/svg+xml;base64,${btoa(`
+      <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" fill="${color}" stroke="white" stroke-width="2"/>
+        <circle cx="12" cy="12" r="4" fill="white"/>
+      </svg>
+    `)}`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2],
+    popupAnchor: [0, -size/2]
+  });
 };
 
 interface HealthCentersMapProps {
@@ -166,7 +97,7 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
   const [filterType, setFilterType] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Mock data for Sonora health centers (you would replace this with actual Excel data)
+  // Mock data for Sonora health centers
   useEffect(() => {
     const mockCenters: HealthCenter[] = [
       {
@@ -238,6 +169,34 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
         lat: 32.4606,
         lng: -114.7706,
         codigo_establecimiento: 'HGSLRC005'
+      },
+      {
+        id: '6',
+        nombre: 'Centro de Salud Guaymas',
+        direccion: 'Calle 20 #456',
+        municipio: 'Guaymas',
+        estado: 'Sonora',
+        distrito: 'Distrito 2',
+        tipo: 'Centro de Salud',
+        telefono: '622-222-3456',
+        responsable: 'Dr. Luis Hernández',
+        lat: 27.9167,
+        lng: -110.9000,
+        codigo_establecimiento: 'CSG006'
+      },
+      {
+        id: '7',
+        nombre: 'Clínica del IMSS Navojoa',
+        direccion: 'Av. Tecnológico #789',
+        municipio: 'Navojoa',
+        estado: 'Sonora',
+        distrito: 'Distrito 2',
+        tipo: 'Clínica',
+        telefono: '642-422-1234',
+        responsable: 'Dra. Carmen Ruiz',
+        lat: 27.0667,
+        lng: -109.4500,
+        codigo_establecimiento: 'CIN007'
       }
     ];
     setCenters(mockCenters);
@@ -277,18 +236,27 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
       // For now, we'll simulate the process
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // In a real implementation, you would:
-      // 1. Read the Excel file using the xlsx library
-      // 2. Parse the data and extract health centers for Sonora
-      // 3. Geocode addresses to get lat/lng coordinates
-      // 4. Update the centers state
-      
       console.log('File uploaded:', file.name);
       // onFileUpload?.(parsedCenters);
     } catch (error) {
       console.error('Error processing file:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getTypeIcon = (tipo: string) => {
+    switch (tipo.toLowerCase()) {
+      case 'hospital':
+        return <Hospital className="h-4 w-4 text-red-600" />;
+      case 'centro de salud':
+        return <Building2 className="h-4 w-4 text-blue-600" />;
+      case 'clínica':
+        return <Stethoscope className="h-4 w-4 text-green-600" />;
+      case 'unidad móvil':
+        return <Truck className="h-4 w-4 text-yellow-600" />;
+      default:
+        return <MapPin className="h-4 w-4 text-purple-600" />;
     }
   };
 
@@ -384,21 +352,59 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
             <span>Clínicas</span>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <span>Unidades Móviles</span>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
         <div className="lg:col-span-2 h-96 lg:h-[600px]">
-          <Wrapper
-            apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "YOUR_GOOGLE_MAPS_API_KEY"}
-            render={render}
+          <MapContainer
+            center={[29.0729, -110.9559]} // Hermosillo, Sonora
+            zoom={7}
+            style={{ height: '100%', width: '100%' }}
+            className="z-0"
           >
-            <Map
-              centers={filteredCenters}
-              selectedCenter={selectedCenter}
-              onCenterSelect={setSelectedCenter}
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-          </Wrapper>
+            
+            <FitBounds centers={filteredCenters} />
+            <CenterSelector selectedCenter={selectedCenter} />
+            
+            {filteredCenters.map(center => (
+              <Marker
+                key={center.id}
+                position={[center.lat, center.lng]}
+                icon={createCustomIcon(center.tipo, selectedCenter?.id === center.id)}
+                eventHandlers={{
+                  click: () => setSelectedCenter(center)
+                }}
+              >
+                <Popup>
+                  <div className="p-2 max-w-sm">
+                    <h3 className="font-bold text-lg text-blue-800 mb-2">{center.nombre}</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      {getTypeIcon(center.tipo)}
+                      <span className="text-sm text-gray-600">{center.tipo}</span>
+                    </div>
+                    <p className="text-sm mb-1"><strong>Dirección:</strong> {center.direccion}</p>
+                    <p className="text-sm mb-1"><strong>Municipio:</strong> {center.municipio}</p>
+                    <p className="text-sm mb-1"><strong>Distrito:</strong> {center.distrito}</p>
+                    {center.telefono && (
+                      <p className="text-sm mb-1"><strong>Teléfono:</strong> {center.telefono}</p>
+                    )}
+                    {center.responsable && (
+                      <p className="text-sm"><strong>Responsable:</strong> {center.responsable}</p>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
         </div>
 
         <div className="bg-gray-50 p-4 overflow-y-auto max-h-96 lg:max-h-[600px]">
@@ -413,7 +419,7 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
                 onClick={() => setSelectedCenter(center)}
               >
                 <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
+                  {getTypeIcon(center.tipo)}
                   <div className="min-w-0 flex-1">
                     <h5 className="font-medium text-sm text-gray-900 truncate">
                       {center.nombre}

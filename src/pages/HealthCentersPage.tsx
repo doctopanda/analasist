@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import HealthCentersMap from '../components/HealthCentersMap';
 import { ExcelService, HealthCenterData } from '../services/excelService';
-import { AlertCircle, CheckCircle, Download, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, RefreshCw, Info } from 'lucide-react';
 
 const HealthCentersPage: React.FC = () => {
   const [centers, setCenters] = useState<HealthCenterData[]>([]);
@@ -198,17 +198,20 @@ const HealthCentersPage: React.FC = () => {
           </ul>
         </div>
 
-        {/* API Key Notice */}
-        {!import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY === 'YOUR_GOOGLE_MAPS_API_KEY_HERE' && (
-          <div className="bg-orange-50 border border-orange-200 rounded-md p-4">
-            <h3 className="text-sm font-medium text-orange-800 mb-2">
-              Configuración requerida:
-            </h3>
-            <p className="text-sm text-orange-700">
-              Para que el mapa funcione correctamente, necesita configurar una clave de API de Google Maps válida en el archivo .env
-            </p>
+        {/* Map Technology Notice */}
+        <div className="bg-green-50 border border-green-200 rounded-md p-4">
+          <div className="flex items-center">
+            <Info className="h-5 w-5 text-green-600 mr-3" />
+            <div>
+              <h3 className="text-sm font-medium text-green-800 mb-1">
+                Mapa gratuito con OpenStreetMap
+              </h3>
+              <p className="text-sm text-green-700">
+                Este mapa utiliza OpenStreetMap y Leaflet, una alternativa gratuita y de código abierto que no requiere claves de API ni pagos.
+              </p>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </Layout>
   );
