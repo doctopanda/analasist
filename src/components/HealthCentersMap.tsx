@@ -5,26 +5,8 @@ import { MapPin, Search, Download, Upload, Hospital, Building2, Stethoscope, Tru
 import { ExcelService, HealthCenterData } from '../services/excelService';
 import 'leaflet/dist/leaflet.css';
 
-interface HealthCenter {
-  id: string;
-  nombre: string;
-  direccion: string;
-  municipio: string;
-  estado: string;
-  distrito: string;
-  tipo: string;
-  telefono?: string;
-  email?: string;
-  responsable?: string;
-  lat: number;
-  lng: number;
-  codigo_establecimiento: string;
-  horario?: string;
-  clues?: string;
-}
-
 // Custom hook to fit map bounds to markers
-const FitBounds: React.FC<{ centers: HealthCenter[] }> = ({ centers }) => {
+const FitBounds: React.FC<{ centers: HealthCenterData[] }> = ({ centers }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -41,7 +23,7 @@ const FitBounds: React.FC<{ centers: HealthCenter[] }> = ({ centers }) => {
 
 // Custom hook to handle center selection
 const CenterSelector: React.FC<{ 
-  selectedCenter: HealthCenter | null;
+  selectedCenter: HealthCenterData | null;
 }> = ({ selectedCenter }) => {
   const map = useMap();
 
@@ -64,6 +46,12 @@ const createCustomIcon = (tipo: string, isSelected: boolean = false) => {
         return '#2563eb'; // blue-600
       case 'clínica':
         return '#16a34a'; // green-600
+      case 'farmacia':
+        return '#7c3aed'; // purple-600
+      case 'consultorio médico':
+        return '#ca8a04'; // yellow-600
+      case 'consultorio dental':
+        return '#ec4899'; // pink-600
       case 'unidad móvil':
         return '#ca8a04'; // yellow-600
       default:
@@ -88,135 +76,27 @@ const createCustomIcon = (tipo: string, isSelected: boolean = false) => {
 };
 
 interface HealthCentersMapProps {
-  centers?: HealthCenter[];
-  onFileUpload?: (centers: HealthCenter[]) => void;
+  centers: HealthCenterData[];
+  onFileUpload?: (centers: HealthCenterData[]) => void;
   onExportData?: () => void;
 }
 
 const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ 
-  centers: externalCenters = [], 
+  centers = [], 
   onFileUpload,
   onExportData 
 }) => {
-  const [centers, setCenters] = useState<HealthCenter[]>([]);
-  const [filteredCenters, setFilteredCenters] = useState<HealthCenter[]>([]);
-  const [selectedCenter, setSelectedCenter] = useState<HealthCenter | null>(null);
+  const [filteredCenters, setFilteredCenters] = useState<HealthCenterData[]>(centers);
+  const [selectedCenter, setSelectedCenter] = useState<HealthCenterData | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMunicipality, setFilterMunicipality] = useState('');
   const [filterType, setFilterType] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Use external centers if provided, otherwise use mock data
+  // Update filtered centers when centers prop changes
   useEffect(() => {
-    if (externalCenters.length > 0) {
-      setCenters(externalCenters);
-      setFilteredCenters(externalCenters);
-    } else {
-      // Mock data for Sonora health centers
-      const mockCenters: HealthCenter[] = [
-        {
-          id: '1',
-          nombre: 'Hospital General del Estado de Sonora',
-          direccion: 'Blvd. Luis Encinas Johnson s/n',
-          municipio: 'Hermosillo',
-          estado: 'Sonora',
-          distrito: 'Distrito 1',
-          tipo: 'Hospital',
-          telefono: '662-259-2500',
-          responsable: 'Dr. Juan Pérez',
-          lat: 29.0729,
-          lng: -110.9559,
-          codigo_establecimiento: 'HGES001'
-        },
-        {
-          id: '2',
-          nombre: 'Centro de Salud Urbano Villa de Seris',
-          direccion: 'Calle Sonora #123, Villa de Seris',
-          municipio: 'Hermosillo',
-          estado: 'Sonora',
-          distrito: 'Distrito 1',
-          tipo: 'Centro de Salud',
-          telefono: '662-215-8900',
-          responsable: 'Dra. María González',
-          lat: 29.0892,
-          lng: -110.9618,
-          codigo_establecimiento: 'CSVS002'
-        },
-        {
-          id: '3',
-          nombre: 'Hospital General de Cajeme',
-          direccion: 'Calle 5 de Febrero #311',
-          municipio: 'Cajeme',
-          estado: 'Sonora',
-          distrito: 'Distrito 2',
-          tipo: 'Hospital',
-          telefono: '644-414-0050',
-          responsable: 'Dr. Carlos Rodríguez',
-          lat: 27.3833,
-          lng: -109.9167,
-          codigo_establecimiento: 'HGC003'
-        },
-        {
-          id: '4',
-          nombre: 'Centro de Salud Nogales',
-          direccion: 'Av. Obregón #1234',
-          municipio: 'Nogales',
-          estado: 'Sonora',
-          distrito: 'Distrito 3',
-          tipo: 'Centro de Salud',
-          telefono: '631-311-2500',
-          responsable: 'Dra. Ana López',
-          lat: 31.3081,
-          lng: -110.9342,
-          codigo_establecimiento: 'CSN004'
-        },
-        {
-          id: '5',
-          nombre: 'Hospital General San Luis Río Colorado',
-          direccion: 'Av. Reforma #567',
-          municipio: 'San Luis Río Colorado',
-          estado: 'Sonora',
-          distrito: 'Distrito 4',
-          tipo: 'Hospital',
-          telefono: '653-534-1234',
-          responsable: 'Dr. Roberto Martínez',
-          lat: 32.4606,
-          lng: -114.7706,
-          codigo_establecimiento: 'HGSLRC005'
-        },
-        {
-          id: '6',
-          nombre: 'Centro de Salud Guaymas',
-          direccion: 'Calle 20 #456',
-          municipio: 'Guaymas',
-          estado: 'Sonora',
-          distrito: 'Distrito 2',
-          tipo: 'Centro de Salud',
-          telefono: '622-222-3456',
-          responsable: 'Dr. Luis Hernández',
-          lat: 27.9167,
-          lng: -110.9000,
-          codigo_establecimiento: 'CSG006'
-        },
-        {
-          id: '7',
-          nombre: 'Clínica del IMSS Navojoa',
-          direccion: 'Av. Tecnológico #789',
-          municipio: 'Navojoa',
-          estado: 'Sonora',
-          distrito: 'Distrito 2',
-          tipo: 'Clínica',
-          telefono: '642-422-1234',
-          responsable: 'Dra. Carmen Ruiz',
-          lat: 27.0667,
-          lng: -109.4500,
-          codigo_establecimiento: 'CIN007'
-        }
-      ];
-      setCenters(mockCenters);
-      setFilteredCenters(mockCenters);
-    }
-  }, [externalCenters]);
+    setFilteredCenters(centers);
+  }, [centers]);
 
   // Filter centers based on search and filters
   useEffect(() => {
@@ -249,8 +129,6 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
     setLoading(true);
     try {
       const healthCenters = await ExcelService.parseFileUpload(file);
-      setCenters(healthCenters);
-      setFilteredCenters(healthCenters);
       onFileUpload?.(healthCenters);
     } catch (error) {
       console.error('Error processing file:', error);
@@ -261,46 +139,6 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
   };
 
   const handleExportData = () => {
-    if (centers.length === 0) {
-      alert('No hay datos para exportar');
-      return;
-    }
-
-    // Create CSV content
-    const csvContent = [
-      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Horario,Latitud,Longitud',
-      ...centers.map(center => [
-        center.id,
-        `"${center.nombre}"`,
-        `"${center.direccion}"`,
-        center.municipio,
-        center.estado,
-        center.distrito,
-        center.tipo,
-        center.telefono || '',
-        center.email || '',
-        `"${center.responsable || ''}"`,
-        center.codigo_establecimiento,
-        center.clues || '',
-        `"${center.horario || ''}"`,
-        center.lat,
-        center.lng
-      ].join(','))
-    ].join('\n');
-
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `centros_salud_sonora_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    // Call external export handler if provided
     onExportData?.();
   };
 
@@ -312,6 +150,12 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
         return <Building2 className="h-4 w-4 text-blue-600" />;
       case 'clínica':
         return <Stethoscope className="h-4 w-4 text-green-600" />;
+      case 'farmacia':
+        return <MapPin className="h-4 w-4 text-purple-600" />;
+      case 'consultorio médico':
+        return <Stethoscope className="h-4 w-4 text-yellow-600" />;
+      case 'consultorio dental':
+        return <Stethoscope className="h-4 w-4 text-pink-600" />;
       case 'unidad móvil':
         return <Truck className="h-4 w-4 text-yellow-600" />;
       default:
@@ -415,8 +259,8 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({
             <span>Clínicas</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-            <span>Unidades Móviles</span>
+            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+            <span>Otros</span>
           </div>
         </div>
       </div>

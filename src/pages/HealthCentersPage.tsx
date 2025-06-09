@@ -3,24 +3,24 @@ import Layout from '../components/Layout';
 import HealthCentersMap from '../components/HealthCentersMap';
 import { ExcelService, HealthCenterData } from '../services/excelService';
 import { HealthCentersService, DataSource } from '../services/healthCentersService';
+import { useHealthCenters } from '../contexts/HealthCentersContext';
 import { AlertCircle, CheckCircle, Download, RefreshCw, Info, Database, Globe, Building2 } from 'lucide-react';
 
 const HealthCentersPage: React.FC = () => {
-  const [centers, setCenters] = useState<HealthCenterData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { centers, addCenters, setCenters, loading, setLoading } = useHealthCenters();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
-  const [selectedSources, setSelectedSources] = useState<string[]>(['GOBI']);
   const [dataStats, setDataStats] = useState<{
     gobi: number;
     osm: number;
     total: number;
-  }>({ gobi: 0, osm: 0, total: 0 });
+  }>({ gobi: 0, osm: 0, total: centers.length });
 
   useEffect(() => {
     setDataSources(HealthCentersService.getAvailableDataSources());
-  }, []);
+    setDataStats(prev => ({ ...prev, total: centers.length }));
+  }, [centers.length]);
 
   const handleDownloadFromGOBI = async () => {
     setLoading(true);
@@ -36,9 +36,10 @@ const HealthCentersPage: React.FC = () => {
       
       const healthCenters = await ExcelService.downloadAndParseExcel(gobiDataSource.url);
       
+      // Replace all centers with GOBI data
       setCenters(healthCenters);
       setDataStats(prev => ({ ...prev, gobi: healthCenters.length, total: healthCenters.length }));
-      setSuccess(`Se cargaron ${healthCenters.length} centros de salud desde GOBI`);
+      setSuccess(`Se cargaron ${healthCenters.length} centros de salud desde GOBI y se guardaron en el sistema`);
     } catch (err) {
       setError('Error al descargar datos de GOBI. Verifique la conexión a internet.');
       console.error('Error:', err);
@@ -55,9 +56,10 @@ const HealthCentersPage: React.FC = () => {
     try {
       const osmCenters = await HealthCentersService.fetchFromOpenStreetMap();
       
+      // Replace all centers with OSM data
       setCenters(osmCenters);
       setDataStats(prev => ({ ...prev, osm: osmCenters.length, total: osmCenters.length }));
-      setSuccess(`Se cargaron ${osmCenters.length} establecimientos desde OpenStreetMap`);
+      setSuccess(`Se cargaron ${osmCenters.length} establecimientos desde OpenStreetMap y se guardaron en el sistema`);
     } catch (err) {
       setError('Error al obtener datos de OpenStreetMap. El servicio puede estar temporalmente no disponible.');
       console.error('Error:', err);
@@ -89,6 +91,7 @@ const HealthCentersPage: React.FC = () => {
       const uniqueCenters = HealthCentersService.removeDuplicates ? 
         await HealthCentersService.removeDuplicates(allCenters) : allCenters;
 
+      // Replace all centers with combined data
       setCenters(uniqueCenters);
       setDataStats({
         gobi: results.gobi.length,
@@ -96,7 +99,7 @@ const HealthCentersPage: React.FC = () => {
         total: uniqueCenters.length
       });
       
-      setSuccess(`Se combinaron datos de múltiples fuentes: ${results.gobi.length} de GOBI + ${results.osm.length} de OSM = ${uniqueCenters.length} únicos`);
+      setSuccess(`Se combinaron datos de múltiples fuentes: ${results.gobi.length} de GOBI + ${results.osm.length} de OSM = ${uniqueCenters.length} únicos y se guardaron en el sistema`);
     } catch (err) {
       setError('Error al combinar datos de múltiples fuentes.');
       console.error('Error:', err);
@@ -106,9 +109,10 @@ const HealthCentersPage: React.FC = () => {
   };
 
   const handleFileUpload = async (uploadedCenters: HealthCenterData[]) => {
-    setCenters(uploadedCenters);
-    setDataStats(prev => ({ ...prev, total: uploadedCenters.length }));
-    setSuccess(`Se cargaron ${uploadedCenters.length} centros de salud`);
+    // Add uploaded centers to existing ones
+    addCenters(uploadedCenters);
+    setDataStats(prev => ({ ...prev, total: centers.length + uploadedCenters.length }));
+    setSuccess(`Se cargaron ${uploadedCenters.length} centros de salud desde Excel y se guardaron en el sistema`);
   };
 
   const handleExportData = () => {
@@ -118,7 +122,7 @@ const HealthCentersPage: React.FC = () => {
     }
 
     const csvContent = [
-      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,Latitud,Longitud,Fuente',
+      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Latitud,Longitud,Fuente',
       ...centers.map(center => [
         center.id,
         `"${center.nombre}"`,
@@ -131,6 +135,7 @@ const HealthCentersPage: React.FC = () => {
         center.email || '',
         `"${center.responsable || ''}"`,
         center.codigo_establecimiento,
+        center.clues || '',
         center.lat,
         center.lng,
         center.id.startsWith('osm_') ? 'OpenStreetMap' : 'GOBI'
@@ -334,6 +339,8 @@ const HealthCentersPage: React.FC = () => {
             <li>• <strong>GOBI Oficial:</strong> Carga solo datos del gobierno (más confiables pero pueden estar incompletos)</li>
             <li>• <strong>OpenStreetMap:</strong> Incluye establecimientos privados y datos colaborativos</li>
             <li>• <strong>Combinar Fuentes:</strong> Obtiene la vista más completa eliminando duplicados</li>
+            <li>• <strong>Cargar Excel:</strong> Sube archivos Excel locales que se agregan a la base de datos</li>
+            <li>• <strong>Persistencia:</strong> Todos los datos se guardan automáticamente en el navegador</li>
             <li>• Use los filtros para buscar centros específicos por nombre, municipio o tipo</li>
             <li>• Exporte los datos combinados para análisis adicional</li>
           </ul>
