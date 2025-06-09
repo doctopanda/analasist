@@ -13,7 +13,7 @@ export class HealthCentersService {
     {
       name: 'GOBI - Catálogo Maestro',
       type: 'government',
-      url: 'https://datos.gob.mx/busca/dataset/establecimientos-de-salud/resource/b4b1c0e4-8b4a-4b4a-8b4a-4b4a8b4a8b4a',
+      url: 'https://datos.gob.mx/busca/dataset/establecimientos-de-salud',
       description: 'Base de datos oficial del gobierno mexicano',
       status: 'inactive'
     },
@@ -35,17 +35,21 @@ export class HealthCentersService {
 
   static async fetchFromOpenStreetMap(): Promise<HealthCenterData[]> {
     try {
-      // Sonora bounding box coordinates - corrected format: south,west,north,east
-      const bbox = '26.0,-115.0,32.5,-108.0'; // south,west,north,east
+      // Sonora bounding box coordinates in correct format: south,west,north,east
+      const bbox = '26.0,-115.0,32.5,-108.0';
       
       const query = `
-        [out:json][timeout:25];
+        [out:json][timeout:30];
         (
           node["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy)$"](${bbox});
           node["healthcare"](${bbox});
+          way["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy)$"](${bbox});
+          way["healthcare"](${bbox});
         );
-        out;
+        out geom;
       `;
+
+      console.log('Sending OSM query:', query);
 
       const response = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
@@ -56,10 +60,13 @@ export class HealthCentersService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('OSM API Error Response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('OSM API Response:', data);
       return this.parseOSMData(data);
     } catch (error) {
       console.error('Error fetching from OpenStreetMap:', error);
@@ -71,8 +78,11 @@ export class HealthCentersService {
     const healthCenters: HealthCenterData[] = [];
 
     if (!osmData.elements) {
+      console.warn('No elements found in OSM response');
       return healthCenters;
     }
+
+    console.log(`Processing ${osmData.elements.length} OSM elements`);
 
     osmData.elements.forEach((element: any, index: number) => {
       try {
@@ -88,7 +98,14 @@ export class HealthCentersService {
           lat = coords.reduce((sum: number, coord: any) => sum + coord.lat, 0) / coords.length;
           lng = coords.reduce((sum: number, coord: any) => sum + coord.lon, 0) / coords.length;
         } else {
+          console.warn(`Skipping element ${index}: no coordinates available`);
           return; // Skip if no coordinates
+        }
+
+        // Validate coordinates are within Sonora bounds
+        if (lat < 26.0 || lat > 32.5 || lng < -115.0 || lng > -108.0) {
+          console.warn(`Skipping element ${index}: coordinates outside Sonora bounds`);
+          return;
         }
 
         const tags = element.tags || {};
@@ -132,6 +149,7 @@ export class HealthCentersService {
       }
     });
 
+    console.log(`Successfully parsed ${healthCenters.length} health centers from OSM`);
     return healthCenters;
   }
 
@@ -207,10 +225,16 @@ export class HealthCentersService {
 
     try {
       // Fetch from OpenStreetMap
+      console.log('Fetching data from OpenStreetMap...');
       results.osm = await this.fetchFromOpenStreetMap();
+      console.log(`Successfully fetched ${results.osm.length} centers from OSM`);
     } catch (error) {
       console.error('Error fetching from OSM:', error);
+      // Don't throw here, continue with other sources
     }
+
+    // Note: GOBI source is currently inactive due to URL issues
+    // The Excel service will handle the error gracefully
 
     // Combine and deduplicate
     results.combined = [...results.gobi, ...results.osm];
@@ -218,6 +242,7 @@ export class HealthCentersService {
     // Remove duplicates based on proximity (within 100 meters)
     results.combined = this.removeDuplicates(results.combined);
 
+    console.log(`Final combined results: ${results.combined.length} health centers`);
     return results;
   }
 
