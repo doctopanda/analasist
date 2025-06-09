@@ -28,8 +28,13 @@ const HealthCentersPage: React.FC = () => {
     setSuccess(null);
 
     try {
-      const excelUrl = '/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
-      const healthCenters = await ExcelService.downloadAndParseExcel(excelUrl);
+      // Get the correct GOBI URL from data sources
+      const gobiDataSource = dataSources.find(source => source.name === 'GOBI - Catálogo Maestro');
+      if (!gobiDataSource) {
+        throw new Error('No se encontró la fuente de datos GOBI');
+      }
+      
+      const healthCenters = await ExcelService.downloadAndParseExcel(gobiDataSource.url);
       
       setCenters(healthCenters);
       setDataStats(prev => ({ ...prev, gobi: healthCenters.length, total: healthCenters.length }));
@@ -71,8 +76,10 @@ const HealthCentersPage: React.FC = () => {
       
       // First try to get GOBI data
       try {
-        const excelUrl = '/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
-        results.gobi = await ExcelService.downloadAndParseExcel(excelUrl);
+        const gobiDataSource = dataSources.find(source => source.name === 'GOBI - Catálogo Maestro');
+        if (gobiDataSource) {
+          results.gobi = await ExcelService.downloadAndParseExcel(gobiDataSource.url);
+        }
       } catch (gobiError) {
         console.warn('GOBI data not available:', gobiError);
       }
