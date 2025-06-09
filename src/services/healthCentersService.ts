@@ -42,13 +42,9 @@ export class HealthCentersService {
         [out:json][timeout:25];
         (
           node["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy)$"](${bbox});
-          way["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy)$"](${bbox});
-          relation["amenity"~"^(hospital|clinic|doctors|dentist|pharmacy)$"](${bbox});
           node["healthcare"](${bbox});
-          way["healthcare"](${bbox});
-          relation["healthcare"](${bbox});
         );
-        out geom;
+        out;
       `;
 
       const response = await fetch('https://overpass-api.de/api/interpreter', {
