@@ -85,10 +85,16 @@ const createCustomIcon = (tipo: string, isSelected: boolean = false) => {
 };
 
 interface HealthCentersMapProps {
+  centers?: HealthCenter[];
   onFileUpload?: (centers: HealthCenter[]) => void;
+  onExportData?: () => void;
 }
 
-const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => {
+const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ 
+  centers: externalCenters = [], 
+  onFileUpload,
+  onExportData 
+}) => {
   const [centers, setCenters] = useState<HealthCenter[]>([]);
   const [filteredCenters, setFilteredCenters] = useState<HealthCenter[]>([]);
   const [selectedCenter, setSelectedCenter] = useState<HealthCenter | null>(null);
@@ -97,111 +103,117 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
   const [filterType, setFilterType] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Mock data for Sonora health centers
+  // Use external centers if provided, otherwise use mock data
   useEffect(() => {
-    const mockCenters: HealthCenter[] = [
-      {
-        id: '1',
-        nombre: 'Hospital General del Estado de Sonora',
-        direccion: 'Blvd. Luis Encinas Johnson s/n',
-        municipio: 'Hermosillo',
-        estado: 'Sonora',
-        distrito: 'Distrito 1',
-        tipo: 'Hospital',
-        telefono: '662-259-2500',
-        responsable: 'Dr. Juan Pérez',
-        lat: 29.0729,
-        lng: -110.9559,
-        codigo_establecimiento: 'HGES001'
-      },
-      {
-        id: '2',
-        nombre: 'Centro de Salud Urbano Villa de Seris',
-        direccion: 'Calle Sonora #123, Villa de Seris',
-        municipio: 'Hermosillo',
-        estado: 'Sonora',
-        distrito: 'Distrito 1',
-        tipo: 'Centro de Salud',
-        telefono: '662-215-8900',
-        responsable: 'Dra. María González',
-        lat: 29.0892,
-        lng: -110.9618,
-        codigo_establecimiento: 'CSVS002'
-      },
-      {
-        id: '3',
-        nombre: 'Hospital General de Cajeme',
-        direccion: 'Calle 5 de Febrero #311',
-        municipio: 'Cajeme',
-        estado: 'Sonora',
-        distrito: 'Distrito 2',
-        tipo: 'Hospital',
-        telefono: '644-414-0050',
-        responsable: 'Dr. Carlos Rodríguez',
-        lat: 27.3833,
-        lng: -109.9167,
-        codigo_establecimiento: 'HGC003'
-      },
-      {
-        id: '4',
-        nombre: 'Centro de Salud Nogales',
-        direccion: 'Av. Obregón #1234',
-        municipio: 'Nogales',
-        estado: 'Sonora',
-        distrito: 'Distrito 3',
-        tipo: 'Centro de Salud',
-        telefono: '631-311-2500',
-        responsable: 'Dra. Ana López',
-        lat: 31.3081,
-        lng: -110.9342,
-        codigo_establecimiento: 'CSN004'
-      },
-      {
-        id: '5',
-        nombre: 'Hospital General San Luis Río Colorado',
-        direccion: 'Av. Reforma #567',
-        municipio: 'San Luis Río Colorado',
-        estado: 'Sonora',
-        distrito: 'Distrito 4',
-        tipo: 'Hospital',
-        telefono: '653-534-1234',
-        responsable: 'Dr. Roberto Martínez',
-        lat: 32.4606,
-        lng: -114.7706,
-        codigo_establecimiento: 'HGSLRC005'
-      },
-      {
-        id: '6',
-        nombre: 'Centro de Salud Guaymas',
-        direccion: 'Calle 20 #456',
-        municipio: 'Guaymas',
-        estado: 'Sonora',
-        distrito: 'Distrito 2',
-        tipo: 'Centro de Salud',
-        telefono: '622-222-3456',
-        responsable: 'Dr. Luis Hernández',
-        lat: 27.9167,
-        lng: -110.9000,
-        codigo_establecimiento: 'CSG006'
-      },
-      {
-        id: '7',
-        nombre: 'Clínica del IMSS Navojoa',
-        direccion: 'Av. Tecnológico #789',
-        municipio: 'Navojoa',
-        estado: 'Sonora',
-        distrito: 'Distrito 2',
-        tipo: 'Clínica',
-        telefono: '642-422-1234',
-        responsable: 'Dra. Carmen Ruiz',
-        lat: 27.0667,
-        lng: -109.4500,
-        codigo_establecimiento: 'CIN007'
-      }
-    ];
-    setCenters(mockCenters);
-    setFilteredCenters(mockCenters);
-  }, []);
+    if (externalCenters.length > 0) {
+      setCenters(externalCenters);
+      setFilteredCenters(externalCenters);
+    } else {
+      // Mock data for Sonora health centers
+      const mockCenters: HealthCenter[] = [
+        {
+          id: '1',
+          nombre: 'Hospital General del Estado de Sonora',
+          direccion: 'Blvd. Luis Encinas Johnson s/n',
+          municipio: 'Hermosillo',
+          estado: 'Sonora',
+          distrito: 'Distrito 1',
+          tipo: 'Hospital',
+          telefono: '662-259-2500',
+          responsable: 'Dr. Juan Pérez',
+          lat: 29.0729,
+          lng: -110.9559,
+          codigo_establecimiento: 'HGES001'
+        },
+        {
+          id: '2',
+          nombre: 'Centro de Salud Urbano Villa de Seris',
+          direccion: 'Calle Sonora #123, Villa de Seris',
+          municipio: 'Hermosillo',
+          estado: 'Sonora',
+          distrito: 'Distrito 1',
+          tipo: 'Centro de Salud',
+          telefono: '662-215-8900',
+          responsable: 'Dra. María González',
+          lat: 29.0892,
+          lng: -110.9618,
+          codigo_establecimiento: 'CSVS002'
+        },
+        {
+          id: '3',
+          nombre: 'Hospital General de Cajeme',
+          direccion: 'Calle 5 de Febrero #311',
+          municipio: 'Cajeme',
+          estado: 'Sonora',
+          distrito: 'Distrito 2',
+          tipo: 'Hospital',
+          telefono: '644-414-0050',
+          responsable: 'Dr. Carlos Rodríguez',
+          lat: 27.3833,
+          lng: -109.9167,
+          codigo_establecimiento: 'HGC003'
+        },
+        {
+          id: '4',
+          nombre: 'Centro de Salud Nogales',
+          direccion: 'Av. Obregón #1234',
+          municipio: 'Nogales',
+          estado: 'Sonora',
+          distrito: 'Distrito 3',
+          tipo: 'Centro de Salud',
+          telefono: '631-311-2500',
+          responsable: 'Dra. Ana López',
+          lat: 31.3081,
+          lng: -110.9342,
+          codigo_establecimiento: 'CSN004'
+        },
+        {
+          id: '5',
+          nombre: 'Hospital General San Luis Río Colorado',
+          direccion: 'Av. Reforma #567',
+          municipio: 'San Luis Río Colorado',
+          estado: 'Sonora',
+          distrito: 'Distrito 4',
+          tipo: 'Hospital',
+          telefono: '653-534-1234',
+          responsable: 'Dr. Roberto Martínez',
+          lat: 32.4606,
+          lng: -114.7706,
+          codigo_establecimiento: 'HGSLRC005'
+        },
+        {
+          id: '6',
+          nombre: 'Centro de Salud Guaymas',
+          direccion: 'Calle 20 #456',
+          municipio: 'Guaymas',
+          estado: 'Sonora',
+          distrito: 'Distrito 2',
+          tipo: 'Centro de Salud',
+          telefono: '622-222-3456',
+          responsable: 'Dr. Luis Hernández',
+          lat: 27.9167,
+          lng: -110.9000,
+          codigo_establecimiento: 'CSG006'
+        },
+        {
+          id: '7',
+          nombre: 'Clínica del IMSS Navojoa',
+          direccion: 'Av. Tecnológico #789',
+          municipio: 'Navojoa',
+          estado: 'Sonora',
+          distrito: 'Distrito 2',
+          tipo: 'Clínica',
+          telefono: '642-422-1234',
+          responsable: 'Dra. Carmen Ruiz',
+          lat: 27.0667,
+          lng: -109.4500,
+          codigo_establecimiento: 'CIN007'
+        }
+      ];
+      setCenters(mockCenters);
+      setFilteredCenters(mockCenters);
+    }
+  }, [externalCenters]);
 
   // Filter centers based on search and filters
   useEffect(() => {
@@ -245,6 +257,48 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
     }
   };
 
+  const handleExportData = () => {
+    if (centers.length === 0) {
+      alert('No hay datos para exportar');
+      return;
+    }
+
+    // Create CSV content
+    const csvContent = [
+      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,Latitud,Longitud',
+      ...centers.map(center => [
+        center.id,
+        `"${center.nombre}"`,
+        `"${center.direccion}"`,
+        center.municipio,
+        center.estado,
+        center.distrito,
+        center.tipo,
+        center.telefono || '',
+        center.email || '',
+        `"${center.responsable || ''}"`,
+        center.codigo_establecimiento,
+        center.lat,
+        center.lng
+      ].join(','))
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `centros_salud_sonora_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // Call external export handler if provided
+    onExportData?.();
+  };
+
   const getTypeIcon = (tipo: string) => {
     switch (tipo.toLowerCase()) {
       case 'hospital':
@@ -283,7 +337,10 @@ const HealthCentersMap: React.FC<HealthCentersMapProps> = ({ onFileUpload }) => 
               />
             </label>
             
-            <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+            <button 
+              onClick={handleExportData}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
               <Download className="h-5 w-5 mr-2" />
               Exportar Datos
             </button>

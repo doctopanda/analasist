@@ -139,6 +139,9 @@ const HealthCentersPage: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setSuccess('Datos exportados correctamente');
   };
 
   return (
@@ -296,7 +299,11 @@ const HealthCentersPage: React.FC = () => {
         </div>
 
         {/* Map Component */}
-        <HealthCentersMap onFileUpload={handleFileUpload} />
+        <HealthCentersMap 
+          centers={centers} 
+          onFileUpload={handleFileUpload}
+          onExportData={handleExportData}
+        />
 
         {/* Data Sources Information */}
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
