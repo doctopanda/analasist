@@ -78,10 +78,11 @@ export class ExcelService {
     const rows = jsonData.slice(1);
 
     console.log('Headers found:', headers);
+    console.log('Total rows:', rows.length);
     console.log('Sample row:', rows[0]);
 
-    // Map column indices based on common GOBI Excel column names
-    const columnMap = this.createColumnMap(headers);
+    // Create column mapping based on exact GOBI column names
+    const columnMap = this.createGOBIColumnMap(headers);
     console.log('Column mapping:', columnMap);
 
     const healthCenters: HealthCenterData[] = [];
@@ -90,40 +91,53 @@ export class ExcelService {
       const row = rows[i] as any[];
       
       // Skip empty rows
-      if (!row || row.length === 0) continue;
+      if (!row || row.length === 0 || !row.some(cell => cell !== null && cell !== undefined && cell !== '')) {
+        continue;
+      }
 
       try {
-        const estado = this.getCellValue(row, columnMap.estado);
+        const entidad = this.getCellValue(row, columnMap.entidad);
         
-        // Filter only Sonora health centers
-        if (!estado || !estado.toString().toLowerCase().includes('sonora')) {
+        // Filter only Sonora health centers (clave 26 or name contains Sonora)
+        if (!entidad || (!entidad.toString().toLowerCase().includes('sonora') && entidad.toString() !== '26')) {
           continue;
         }
 
         const lat = this.parseCoordinate(this.getCellValue(row, columnMap.latitud));
         const lng = this.parseCoordinate(this.getCellValue(row, columnMap.longitud));
+        const municipio = this.getCellValue(row, columnMap.municipio) || 'Sin municipio';
+        const clues = this.getCellValue(row, columnMap.clues);
+        const nombreUnidad = this.getCellValue(row, columnMap.nombreUnidad);
+        const nombreInstitucion = this.getCellValue(row, columnMap.nombreInstitucion);
+
+        // Use the most appropriate name
+        const nombre = nombreUnidad || nombreInstitucion || 'Sin nombre';
+
+        // Build address from available components
+        const direccion = this.buildAddress(row, columnMap);
 
         const healthCenter: HealthCenterData = {
-          id: this.getCellValue(row, columnMap.id) || `HC_${i}`,
-          nombre: this.getCellValue(row, columnMap.nombre) || 'Sin nombre',
-          direccion: this.getCellValue(row, columnMap.direccion) || 'Sin dirección',
-          municipio: this.getCellValue(row, columnMap.municipio) || 'Sin municipio',
+          id: clues || `HC_${i}`,
+          nombre: nombre,
+          direccion: direccion,
+          municipio: municipio,
           estado: 'Sonora',
-          distrito: this.getCellValue(row, columnMap.distrito) || this.estimateDistrict(this.getCellValue(row, columnMap.municipio) || ''),
-          tipo: this.getCellValue(row, columnMap.tipo) || 'Centro de Salud',
-          telefono: this.getCellValue(row, columnMap.telefono),
-          email: this.getCellValue(row, columnMap.email),
-          responsable: this.getCellValue(row, columnMap.responsable),
-          codigo_establecimiento: this.getCellValue(row, columnMap.codigo) || `EST_${i}`,
-          horario: this.getCellValue(row, columnMap.horario),
-          clues: this.getCellValue(row, columnMap.clues),
-          lat: lat || this.estimateCoordinates(this.getCellValue(row, columnMap.municipio) || '').lat,
-          lng: lng || this.estimateCoordinates(this.getCellValue(row, columnMap.municipio) || '').lng
+          distrito: this.getCellValue(row, columnMap.jurisdiccion) || this.estimateDistrict(municipio),
+          tipo: this.getCellValue(row, columnMap.tipoEstablecimiento) || this.getCellValue(row, columnMap.tipologia) || 'Centro de Salud',
+          telefono: this.getCellValue(row, columnMap.telefono1) || this.getCellValue(row, columnMap.telefono2),
+          responsable: this.getCellValue(row, columnMap.nombreInstitucion),
+          codigo_establecimiento: clues || this.getCellValue(row, columnMap.claveInstitucion) || `EST_${i}`,
+          clues: clues,
+          lat: lat || this.estimateCoordinates(municipio).lat,
+          lng: lng || this.estimateCoordinates(municipio).lng
         };
 
-        healthCenters.push(healthCenter);
+        // Only add if we have valid coordinates or can estimate them
+        if ((lat && lng) || municipio !== 'Sin municipio') {
+          healthCenters.push(healthCenter);
+        }
       } catch (error) {
-        console.warn(`Error parsing row ${i}:`, error);
+        console.warn(`Error parsing row ${i}:`, error, row);
         continue;
       }
     }
@@ -132,71 +146,126 @@ export class ExcelService {
     return healthCenters;
   }
 
-  private static createColumnMap(headers: string[]): Record<string, number> {
+  private static createGOBIColumnMap(headers: string[]): Record<string, number> {
     const map: Record<string, number> = {};
     
     headers.forEach((header, index) => {
       const normalizedHeader = header.toString().toLowerCase().trim();
       
-      // Map common GOBI column names
-      if (normalizedHeader.includes('id') || 
-          normalizedHeader.includes('clave') || 
-          normalizedHeader.includes('consecutivo')) {
-        map.id = index;
-      } else if (normalizedHeader.includes('nombre') || 
-                 normalizedHeader.includes('denominacion') ||
-                 normalizedHeader.includes('razon_social')) {
-        map.nombre = index;
-      } else if (normalizedHeader.includes('direccion') || 
-                 normalizedHeader.includes('domicilio') ||
-                 normalizedHeader.includes('calle')) {
-        map.direccion = index;
-      } else if (normalizedHeader.includes('municipio')) {
-        map.municipio = index;
-      } else if (normalizedHeader.includes('estado') || 
-                 normalizedHeader.includes('entidad') ||
-                 normalizedHeader.includes('ent_fed')) {
-        map.estado = index;
-      } else if (normalizedHeader.includes('distrito') ||
-                 normalizedHeader.includes('jurisdiccion')) {
-        map.distrito = index;
-      } else if (normalizedHeader.includes('tipo') || 
-                 normalizedHeader.includes('categoria') ||
-                 normalizedHeader.includes('tipologia') ||
-                 normalizedHeader.includes('nivel')) {
-        map.tipo = index;
-      } else if (normalizedHeader.includes('telefono') || 
-                 normalizedHeader.includes('tel')) {
-        map.telefono = index;
-      } else if (normalizedHeader.includes('email') || 
-                 normalizedHeader.includes('correo')) {
-        map.email = index;
-      } else if (normalizedHeader.includes('responsable') || 
-                 normalizedHeader.includes('director') ||
-                 normalizedHeader.includes('titular')) {
-        map.responsable = index;
-      } else if (normalizedHeader.includes('clues')) {
+      // Map exact GOBI column names
+      if (normalizedHeader === 'clues') {
         map.clues = index;
-      } else if (normalizedHeader.includes('codigo') || 
-                 normalizedHeader.includes('establecimiento') ||
-                 normalizedHeader.includes('cve_')) {
-        map.codigo = index;
-      } else if (normalizedHeader.includes('latitud') || 
-                 normalizedHeader.includes('lat') ||
-                 normalizedHeader.includes('y_coord')) {
+      } else if (normalizedHeader === 'clave de la institucion') {
+        map.claveInstitucion = index;
+      } else if (normalizedHeader === 'nombre de la institucion') {
+        map.nombreInstitucion = index;
+      } else if (normalizedHeader === 'clave de la entidad') {
+        map.claveEntidad = index;
+      } else if (normalizedHeader === 'entidad') {
+        map.entidad = index;
+      } else if (normalizedHeader === 'clave del municipio') {
+        map.claveMunicipio = index;
+      } else if (normalizedHeader === 'municipio') {
+        map.municipio = index;
+      } else if (normalizedHeader === 'clave de la localidad') {
+        map.claveLocalidad = index;
+      } else if (normalizedHeader === 'localidad') {
+        map.localidad = index;
+      } else if (normalizedHeader === 'clave de la jurisdiccion') {
+        map.claveJurisdiccion = index;
+      } else if (normalizedHeader === 'jurisdiccion') {
+        map.jurisdiccion = index;
+      } else if (normalizedHeader === 'clave del tipo establecimiento') {
+        map.claveTipoEstablecimiento = index;
+      } else if (normalizedHeader === 'nombre tipo establecimiento') {
+        map.tipoEstablecimiento = index;
+      } else if (normalizedHeader === 'clave de tipologia') {
+        map.claveTipologia = index;
+      } else if (normalizedHeader === 'nombre de tipologia') {
+        map.tipologia = index;
+      } else if (normalizedHeader === 'clave de subtipologia') {
+        map.claveSubtipologia = index;
+      } else if (normalizedHeader === 'nombre de subtipologia') {
+        map.subtipologia = index;
+      } else if (normalizedHeader === 'nombre de la unidad') {
+        map.nombreUnidad = index;
+      } else if (normalizedHeader === 'nombre comercial') {
+        map.nombreComercial = index;
+      } else if (normalizedHeader === 'clave tipo de vialidad') {
+        map.claveTipoVialidad = index;
+      } else if (normalizedHeader === 'tipo de vialidad') {
+        map.tipoVialidad = index;
+      } else if (normalizedHeader === 'vialidad') {
+        map.vialidad = index;
+      } else if (normalizedHeader === 'numero exterior') {
+        map.numeroExterior = index;
+      } else if (normalizedHeader === 'numero interior') {
+        map.numeroInterior = index;
+      } else if (normalizedHeader === 'clave tipo de asentamiento') {
+        map.claveTipoAsentamiento = index;
+      } else if (normalizedHeader === 'tipo de asentamiento') {
+        map.tipoAsentamiento = index;
+      } else if (normalizedHeader === 'asentamiento') {
+        map.asentamiento = index;
+      } else if (normalizedHeader === 'codigo postal') {
+        map.codigoPostal = index;
+      } else if (normalizedHeader === 'telefono 1 del establecimiento') {
+        map.telefono1 = index;
+      } else if (normalizedHeader === 'telefono 2 del establecimiento') {
+        map.telefono2 = index;
+      } else if (normalizedHeader === 'latitud') {
         map.latitud = index;
-      } else if (normalizedHeader.includes('longitud') || 
-                 normalizedHeader.includes('lng') || 
-                 normalizedHeader.includes('lon') ||
-                 normalizedHeader.includes('x_coord')) {
+      } else if (normalizedHeader === 'longitud') {
         map.longitud = index;
-      } else if (normalizedHeader.includes('horario') ||
-                 normalizedHeader.includes('hora')) {
-        map.horario = index;
+      } else if (normalizedHeader === 'nivel atencion') {
+        map.nivelAtencion = index;
+      } else if (normalizedHeader === 'estatus de operacion') {
+        map.estatusOperacion = index;
       }
     });
 
     return map;
+  }
+
+  private static buildAddress(row: any[], columnMap: Record<string, number>): string {
+    const addressParts = [];
+    
+    const tipoVialidad = this.getCellValue(row, columnMap.tipoVialidad);
+    const vialidad = this.getCellValue(row, columnMap.vialidad);
+    const numeroExterior = this.getCellValue(row, columnMap.numeroExterior);
+    const numeroInterior = this.getCellValue(row, columnMap.numeroInterior);
+    const tipoAsentamiento = this.getCellValue(row, columnMap.tipoAsentamiento);
+    const asentamiento = this.getCellValue(row, columnMap.asentamiento);
+    const codigoPostal = this.getCellValue(row, columnMap.codigoPostal);
+
+    // Build street address
+    if (tipoVialidad && vialidad) {
+      addressParts.push(`${tipoVialidad} ${vialidad}`);
+    } else if (vialidad) {
+      addressParts.push(vialidad);
+    }
+
+    if (numeroExterior) {
+      addressParts.push(`#${numeroExterior}`);
+    }
+
+    if (numeroInterior) {
+      addressParts.push(`Int. ${numeroInterior}`);
+    }
+
+    // Add neighborhood/settlement
+    if (tipoAsentamiento && asentamiento) {
+      addressParts.push(`${tipoAsentamiento} ${asentamiento}`);
+    } else if (asentamiento) {
+      addressParts.push(asentamiento);
+    }
+
+    // Add postal code
+    if (codigoPostal) {
+      addressParts.push(`CP ${codigoPostal}`);
+    }
+
+    return addressParts.length > 0 ? addressParts.join(', ') : 'Sin dirección';
   }
 
   private static getCellValue(row: any[], index: number): string | undefined {
@@ -205,7 +274,11 @@ export class ExcelService {
     }
     
     const value = row[index];
-    return value !== null && value !== undefined ? value.toString().trim() : undefined;
+    if (value === null || value === undefined || value === '') {
+      return undefined;
+    }
+    
+    return value.toString().trim();
   }
 
   private static parseCoordinate(value: string | undefined): number | undefined {
@@ -235,7 +308,51 @@ export class ExcelService {
       'empalme': { lat: 27.9667, lng: -110.8167 },
       'huatabampo': { lat: 26.8167, lng: -109.6500 },
       'magdalena': { lat: 30.6167, lng: -110.9667 },
-      'santa ana': { lat: 30.5500, lng: -111.1167 }
+      'santa ana': { lat: 30.5500, lng: -111.1167 },
+      'altar': { lat: 30.7167, lng: -111.8333 },
+      'benjamin hill': { lat: 30.2167, lng: -111.3333 },
+      'pitiquito': { lat: 30.6833, lng: -112.0833 },
+      'saric': { lat: 31.0833, lng: -111.2833 },
+      'tubutama': { lat: 30.9333, lng: -111.6167 },
+      'oquitoa': { lat: 30.7500, lng: -111.8833 },
+      'atil': { lat: 30.6167, lng: -111.6500 },
+      'trincheras': { lat: 30.8167, lng: -111.4167 },
+      'cucurpe': { lat: 30.3833, lng: -110.7167 },
+      'rayón': { lat: 29.7167, lng: -110.5500 },
+      'ures': { lat: 29.4333, lng: -110.3833 },
+      'villa pesqueira': { lat: 29.2167, lng: -109.8833 },
+      'aconchi': { lat: 29.8000, lng: -110.2833 },
+      'san felipe de jesús': { lat: 29.8833, lng: -110.4500 },
+      'huépac': { lat: 29.9000, lng: -110.2167 },
+      'banámichi': { lat: 29.9833, lng: -110.2333 },
+      'arizpe': { lat: 30.3333, lng: -110.1667 },
+      'bacoachi': { lat: 30.6167, lng: -109.8333 },
+      'fronteras': { lat: 30.9000, lng: -109.6167 },
+      'nacozari de garcía': { lat: 30.3833, lng: -109.6833 },
+      'moctezuma': { lat: 29.7833, lng: -109.6833 },
+      'cumpas': { lat: 30.0167, lng: -109.8167 },
+      'villa hidalgo': { lat: 29.8167, lng: -109.4333 },
+      'granados': { lat: 29.6167, lng: -109.4833 },
+      'huachinera': { lat: 30.2833, lng: -109.3167 },
+      'bacadéhuachi': { lat: 29.9167, lng: -109.4000 },
+      'nácori chico': { lat: 29.6833, lng: -109.0833 },
+      'tepache': { lat: 29.5167, lng: -109.2500 },
+      'divisaderos': { lat: 29.3833, lng: -108.9833 },
+      'bavispe': { lat: 30.0167, lng: -108.9167 },
+      'bacerac': { lat: 30.3167, lng: -109.1833 },
+      'huásabas': { lat: 30.1833, lng: -108.7833 },
+      'arivechi': { lat: 28.9333, lng: -108.9167 },
+      'sahuaripa': { lat: 29.0667, lng: -109.2333 },
+      'yécora': { lat: 28.3667, lng: -108.9333 },
+      'onavas': { lat: 28.4333, lng: -109.2833 },
+      'soyopa': { lat: 28.6167, lng: -109.5833 },
+      'san javier': { lat: 28.8167, lng: -109.7167 },
+      'suaqui grande': { lat: 29.0833, lng: -109.5833 },
+      'la colorada': { lat: 28.8833, lng: -109.5167 },
+      'rosario': { lat: 27.9833, lng: -108.9167 },
+      'quiriego': { lat: 27.5500, lng: -108.8833 },
+      'alamos': { lat: 27.0167, lng: -108.9333 },
+      'etchojoa': { lat: 26.7833, lng: -109.6167 }
     };
 
     const normalizedMunicipio = municipio.toLowerCase().trim();
@@ -258,16 +375,20 @@ export class ExcelService {
       'guaymas': 'Distrito 2',
       'empalme': 'Distrito 2',
       'huatabampo': 'Distrito 2',
+      'etchojoa': 'Distrito 2',
       'nogales': 'Distrito 3',
       'agua prieta': 'Distrito 3',
       'magdalena': 'Distrito 3',
       'santa ana': 'Distrito 3',
+      'fronteras': 'Distrito 3',
+      'nacozari de garcía': 'Distrito 3',
+      'cananea': 'Distrito 3',
       'san luis río colorado': 'Distrito 4',
       'san luis rio colorado': 'Distrito 4',
       'puerto peñasco': 'Distrito 4',
-      'puerto penasco': 'Distrito 4',
       'caborca': 'Distrito 4',
-      'cananea': 'Distrito 5',
+      'altar': 'Distrito 4',
+      'pitiquito': 'Distrito 4',
       'obregon': 'Distrito 2',
       'ciudad obregon': 'Distrito 2'
     };
@@ -281,29 +402,5 @@ export class ExcelService {
     }
 
     return 'Distrito no identificado';
-  }
-
-  static async geocodeAddress(address: string, municipio: string, estado: string): Promise<{ lat: number; lng: number } | null> {
-    try {
-      const fullAddress = `${address}, ${municipio}, ${estado}, México`;
-      const geocoder = new google.maps.Geocoder();
-      
-      return new Promise((resolve) => {
-        geocoder.geocode({ address: fullAddress }, (results, status) => {
-          if (status === 'OK' && results && results[0]) {
-            const location = results[0].geometry.location;
-            resolve({
-              lat: location.lat(),
-              lng: location.lng()
-            });
-          } else {
-            resolve(null);
-          }
-        });
-      });
-    } catch (error) {
-      console.error('Geocoding error:', error);
-      return null;
-    }
   }
 }
