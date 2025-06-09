@@ -35,16 +35,6 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Mobile sidebar toggle */}
-      <div className="fixed top-0 left-0 z-40 lg:hidden">
-        <button 
-          onClick={toggleSidebar}
-          className="p-4 text-gray-600 focus:outline-none"
-        >
-          {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
-
       {/* Sidebar */}
       <div 
         className={`fixed inset-y-0 left-0 z-30 w-64 bg-blue-800 text-white transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
@@ -147,9 +137,19 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col lg:ml-64">
-        <header className="bg-white shadow-sm z-10">
+        <header className="bg-white shadow-sm z-10 relative">
           <div className="px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
+            {/* Mobile menu button */}
+            <div className="flex items-center lg:hidden">
+              <button 
+                onClick={toggleSidebar}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mr-3"
+              >
+                {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            </div>
+            
+            <h1 className="text-2xl font-semibold text-gray-800 flex-1 lg:flex-none">{title}</h1>
           </div>
         </header>
 
