@@ -28,7 +28,7 @@ const HealthCentersPage: React.FC = () => {
     setSuccess(null);
 
     try {
-      const excelUrl = 'https://gobi.salud.gob.mx/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
+      const excelUrl = '/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
       const healthCenters = await ExcelService.downloadAndParseExcel(excelUrl);
       
       setCenters(healthCenters);
@@ -71,7 +71,7 @@ const HealthCentersPage: React.FC = () => {
       
       // First try to get GOBI data
       try {
-        const excelUrl = 'https://gobi.salud.gob.mx/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
+        const excelUrl = '/gobi/catalogos/catalogosmaestros/ESTABLECIMIENTO_SALUD_202504.xlsx?V=2025.05.29';
         results.gobi = await ExcelService.downloadAndParseExcel(excelUrl);
       } catch (gobiError) {
         console.warn('GOBI data not available:', gobiError);
