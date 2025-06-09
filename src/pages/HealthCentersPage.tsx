@@ -5,10 +5,10 @@ import GeolocationValidator from '../components/GeolocationValidator';
 import { ExcelService, HealthCenterData } from '../services/excelService';
 import { HealthCentersService, DataSource } from '../services/healthCentersService';
 import { useData } from '../contexts/DataContext';
-import { AlertCircle, CheckCircle, Download, RefreshCw, Info, Database, Globe, Building2, MapPin } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, RefreshCw, Info, Database, Globe, Building2, MapPin, HardDrive } from 'lucide-react';
 
 const HealthCentersPage: React.FC = () => {
-  const { healthCenters, addHealthCenters, setHealthCenters, loading, setLoading } = useData();
+  const { healthCenters, addHealthCenters, setHealthCenters, loading, setLoading, loadPermanentHealthCenters, getDatabaseInfo } = useData();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
@@ -19,10 +19,24 @@ const HealthCentersPage: React.FC = () => {
     total: number;
   }>({ gobi: 0, osm: 0, total: healthCenters.length });
 
+  const databaseInfo = getDatabaseInfo();
+
   useEffect(() => {
     setDataSources(HealthCentersService.getAvailableDataSources());
     setDataStats(prev => ({ ...prev, total: healthCenters.length }));
   }, [healthCenters.length]);
+
+  const handleLoadPermanentDatabase = () => {
+    setLoading(true);
+    try {
+      loadPermanentHealthCenters();
+      setSuccess(`Se cargaron ${databaseInfo.permanentStats.total} centros de salud desde la base de datos permanente`);
+    } catch (error) {
+      setError('Error al cargar la base de datos permanente');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDownloadFromGOBI = async () => {
     setLoading(true);
@@ -124,7 +138,7 @@ const HealthCentersPage: React.FC = () => {
     }
 
     const csvContent = [
-      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Latitud,Longitud,Precisión,Fuente,Fuente',
+      'ID,Nombre,Dirección,Municipio,Estado,Distrito,Tipo,Teléfono,Email,Responsable,Código,CLUES,Latitud,Longitud,Precisión,Fuente',
       ...healthCenters.map(center => [
         center.id,
         `"${center.nombre}"`,
@@ -141,7 +155,6 @@ const HealthCentersPage: React.FC = () => {
         center.lat,
         center.lng,
         (center as any).geolocation_accuracy || 'unknown',
-        (center as any).geolocation_source || 'unknown',
         center.id.startsWith('osm_') ? 'OpenStreetMap' : 'GOBI'
       ].join(','))
     ].join('\n');
@@ -182,6 +195,19 @@ const HealthCentersPage: React.FC = () => {
             
             <div className="flex flex-col sm:flex-row gap-3">
               <button
+                onClick={handleLoadPermanentDatabase}
+                disabled={loading}
+                className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                ) : (
+                  <HardDrive className="h-5 w-5 mr-2" />
+                )}
+                Base Permanente
+              </button>
+              
+              <button
                 onClick={handleDownloadFromGOBI}
                 disabled={loading}
                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -210,7 +236,7 @@ const HealthCentersPage: React.FC = () => {
               <button
                 onClick={handleDownloadFromMultipleSources}
                 disabled={loading}
-                className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
@@ -231,8 +257,47 @@ const HealthCentersPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Database Status */}
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex items-center gap-2 mb-2">
+              <HardDrive className="h-5 w-5 text-blue-600" />
+              <h4 className="font-medium text-blue-800">Estado de la Base de Datos</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-blue-600">Centros Cargados:</span>
+                <span className="font-medium text-blue-900 ml-2">{databaseInfo.currentCount}</span>
+              </div>
+              <div>
+                <span className="text-blue-600">Fuente:</span>
+                <span className="font-medium text-blue-900 ml-2 capitalize">{databaseInfo.source}</span>
+              </div>
+              <div>
+                <span className="text-blue-600">Base Permanente:</span>
+                <span className="font-medium text-blue-900 ml-2">{databaseInfo.permanentStats.total} disponibles</span>
+              </div>
+              <div>
+                <span className="text-blue-600">Última Actualización:</span>
+                <span className="font-medium text-blue-900 ml-2">
+                  {databaseInfo.lastUpdated !== 'unknown' ? 
+                    new Date(databaseInfo.lastUpdated).toLocaleDateString() : 
+                    'No disponible'
+                  }
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Data Sources Information */}
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-purple-50 p-3 rounded-md">
+              <div className="flex items-center gap-2 mb-1">
+                <HardDrive className="h-4 w-4 text-purple-600" />
+                <h4 className="font-medium text-sm text-purple-800">Base Permanente</h4>
+              </div>
+              <p className="text-xs text-purple-600">Datos guardados permanentemente en el código</p>
+            </div>
+            
             {dataSources.filter(source => source.status === 'active').map((source, index) => (
               <div key={index} className="bg-gray-50 p-3 rounded-md">
                 <div className="flex items-center gap-2 mb-1">
@@ -372,35 +437,40 @@ const HealthCentersPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Data Sources Information */}
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-          <h3 className="text-sm font-medium text-blue-800 mb-2">
-            Fuentes de Datos Disponibles:
-          </h3>
-          <ul className="text-sm text-blue-700 space-y-1">
-            <li>• <strong>GOBI:</strong> Base de datos oficial del gobierno mexicano con establecimientos registrados</li>
-            <li>• <strong>OpenStreetMap:</strong> Datos colaborativos que incluyen establecimientos públicos y privados</li>
-            <li>• <strong>Combinar Fuentes:</strong> Integra ambas fuentes eliminando duplicados por proximidad geográfica</li>
-            <li>• <strong>Validación de Coordenadas:</strong> Verifica la precisión geográfica y corrige ubicaciones incorrectas</li>
-            <li>• Los datos de OSM pueden incluir consultorios privados, farmacias y clínicas no registradas oficialmente</li>
-          </ul>
-        </div>
+        {/* Information Panels */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Data Sources Information */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+            <h3 className="text-sm font-medium text-blue-800 mb-2">
+              Fuentes de Datos Disponibles:
+            </h3>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>• <strong>Base Permanente:</strong> {databaseInfo.permanentStats.total} centros guardados permanentemente en el código</li>
+              <li>• <strong>GOBI:</strong> Base de datos oficial del gobierno mexicano con establecimientos registrados</li>
+              <li>• <strong>OpenStreetMap:</strong> Datos colaborativos que incluyen establecimientos públicos y privados</li>
+              <li>• <strong>Combinar Fuentes:</strong> Integra ambas fuentes eliminando duplicados por proximidad geográfica</li>
+              <li>• <strong>Validación de Coordenadas:</strong> Verifica la precisión geográfica y corrige ubicaciones incorrectas</li>
+              <li>• Los datos de OSM pueden incluir consultorios privados, farmacias y clínicas no registradas oficialmente</li>
+            </ul>
+          </div>
 
-        {/* Instructions */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <h3 className="text-sm font-medium text-yellow-800 mb-2">
-            Instrucciones de uso:
-          </h3>
-          <ul className="text-sm text-yellow-700 space-y-1">
-            <li>• <strong>GOBI Oficial:</strong> Carga solo datos del gobierno (más confiables pero pueden estar incompletos)</li>
-            <li>• <strong>OpenStreetMap:</strong> Incluye establecimientos privados y datos colaborativos</li>
-            <li>• <strong>Combinar Fuentes:</strong> Obtiene la vista más completa eliminando duplicados</li>
-            <li>• <strong>Cargar Excel:</strong> Sube archivos Excel locales que se agregan a la base de datos</li>
-            <li>• <strong>Validación:</strong> Use la pestaña de validación para verificar y corregir coordenadas</li>
-            <li>• <strong>Persistencia:</strong> Todos los datos se guardan automáticamente en el navegador</li>
-            <li>• Use los filtros para buscar centros específicos por nombre, municipio o tipo</li>
-            <li>• Exporte los datos combinados para análisis adicional</li>
-          </ul>
+          {/* Instructions */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <h3 className="text-sm font-medium text-yellow-800 mb-2">
+              Instrucciones de uso:
+            </h3>
+            <ul className="text-sm text-yellow-700 space-y-1">
+              <li>• <strong>Base Permanente:</strong> Carga los {databaseInfo.permanentStats.total} centros guardados permanentemente (recomendado)</li>
+              <li>• <strong>GOBI Oficial:</strong> Carga solo datos del gobierno (más confiables pero pueden estar incompletos)</li>
+              <li>• <strong>OpenStreetMap:</strong> Incluye establecimientos privados y datos colaborativos</li>
+              <li>• <strong>Combinar Fuentes:</strong> Obtiene la vista más completa eliminando duplicados</li>
+              <li>• <strong>Cargar Excel:</strong> Sube archivos Excel locales que se agregan a la base de datos</li>
+              <li>• <strong>Validación:</strong> Use la pestaña de validación para verificar y corregir coordenadas</li>
+              <li>• <strong>Persistencia:</strong> Todos los datos se guardan automáticamente en el navegador</li>
+              <li>• Use los filtros para buscar centros específicos por nombre, municipio o tipo</li>
+              <li>• Exporte los datos combinados para análisis adicional</li>
+            </ul>
+          </div>
         </div>
       </div>
     </Layout>

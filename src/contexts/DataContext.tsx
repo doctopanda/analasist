@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { HealthCenterData } from '../services/excelService';
+import { getPermanentHealthCenters, getPermanentDatabaseStats } from '../data/permanentHealthCenters';
 
 interface User {
   id: number;
@@ -51,6 +52,7 @@ interface DataContextType {
   addHealthCenters: (newCenters: HealthCenterData[]) => void;
   updateHealthCenter: (id: string, updatedCenter: Partial<HealthCenterData>) => void;
   deleteHealthCenter: (id: string) => void;
+  loadPermanentHealthCenters: () => void;
   
   // Users
   users: User[];
@@ -85,6 +87,13 @@ interface DataContextType {
     criticalAlerts: number;
   };
   
+  // Database info
+  getDatabaseInfo: () => {
+    isPermanentLoaded: boolean;
+    permanentStats: any;
+    lastUpdated: string;
+  };
+  
   loading: boolean;
   setLoading: (loading: boolean) => void;
 }
@@ -97,8 +106,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [reports, setReportsState] = useState<Report[]>([]);
   const [alerts, setAlertsState] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isPermanentLoaded, setIsPermanentLoaded] = useState(false);
 
-  // Load data from localStorage on mount
+  // Load data from localStorage on mount, with permanent database fallback
   useEffect(() => {
     loadStoredData();
   }, []);
@@ -110,12 +120,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadStoredData = () => {
     try {
-      // Load health centers
+      // Load health centers - check localStorage first, then permanent database
       const storedCenters = localStorage.getItem('healthCenters');
       if (storedCenters) {
-        setHealthCentersState(JSON.parse(storedCenters));
+        const parsedCenters = JSON.parse(storedCenters);
+        setHealthCentersState(parsedCenters);
+        console.log(`Loaded ${parsedCenters.length} health centers from localStorage`);
       } else {
-        loadDefaultHealthCenters();
+        // Load permanent database if no localStorage data
+        loadPermanentHealthCenters();
       }
 
       // Load users
@@ -147,25 +160,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loadPermanentHealthCenters = () => {
+    try {
+      const permanentCenters = getPermanentHealthCenters();
+      setHealthCentersState(permanentCenters);
+      setIsPermanentLoaded(true);
+      
+      // Save to localStorage for future use
+      localStorage.setItem('healthCenters', JSON.stringify(permanentCenters));
+      localStorage.setItem('healthCentersSource', 'permanent');
+      localStorage.setItem('healthCentersLoadedAt', new Date().toISOString());
+      
+      console.log(`Loaded ${permanentCenters.length} health centers from permanent database`);
+    } catch (error) {
+      console.error('Error loading permanent health centers:', error);
+      loadDefaultHealthCenters();
+    }
+  };
+
   const saveDataToStorage = () => {
     try {
       localStorage.setItem('healthCenters', JSON.stringify(healthCenters));
       localStorage.setItem('users', JSON.stringify(users));
       localStorage.setItem('reports', JSON.stringify(reports));
       localStorage.setItem('alerts', JSON.stringify(alerts));
+      localStorage.setItem('lastSaved', new Date().toISOString());
     } catch (error) {
       console.error('Error saving data to storage:', error);
     }
   };
 
   const loadDefaultData = () => {
-    loadDefaultHealthCenters();
+    loadPermanentHealthCenters(); // Use permanent database as default
     loadDefaultUsers();
     loadDefaultReports();
     loadDefaultAlerts();
   };
 
   const loadDefaultHealthCenters = () => {
+    // Fallback to basic centers if permanent database fails
     const defaultCenters: HealthCenterData[] = [
       {
         id: '1',
@@ -181,36 +214,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lng: -110.9559,
         codigo_establecimiento: 'HGES001',
         clues: 'SSHES001A00'
-      },
-      {
-        id: '2',
-        nombre: 'Centro de Salud Urbano Villa de Seris',
-        direccion: 'Calle Sonora #123, Villa de Seris',
-        municipio: 'Hermosillo',
-        estado: 'Sonora',
-        distrito: 'Distrito 1',
-        tipo: 'Centro de Salud',
-        telefono: '662-215-8900',
-        responsable: 'Dra. María González',
-        lat: 29.0892,
-        lng: -110.9618,
-        codigo_establecimiento: 'CSVS002',
-        clues: 'SSHES002B00'
-      },
-      {
-        id: '3',
-        nombre: 'Hospital General de Cajeme',
-        direccion: 'Calle 5 de Febrero #311',
-        municipio: 'Cajeme',
-        estado: 'Sonora',
-        distrito: 'Distrito 2',
-        tipo: 'Hospital',
-        telefono: '644-414-0050',
-        responsable: 'Dr. Carlos Rodríguez',
-        lat: 27.3833,
-        lng: -109.9167,
-        codigo_establecimiento: 'HGC003',
-        clues: 'SSHES003A00'
       }
     ];
     setHealthCentersState(defaultCenters);
@@ -321,13 +324,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Health Centers methods
   const setHealthCenters = (centers: HealthCenterData[]) => {
     setHealthCentersState(centers);
+    localStorage.setItem('healthCentersSource', 'manual');
+    localStorage.setItem('healthCentersLoadedAt', new Date().toISOString());
   };
 
   const addHealthCenters = (newCenters: HealthCenterData[]) => {
     setHealthCentersState(prevCenters => {
       const existingIds = new Set(prevCenters.map(c => c.clues || c.id));
       const uniqueNewCenters = newCenters.filter(c => !existingIds.has(c.clues || c.id));
-      return [...prevCenters, ...uniqueNewCenters];
+      const combined = [...prevCenters, ...uniqueNewCenters];
+      
+      localStorage.setItem('healthCentersSource', 'combined');
+      localStorage.setItem('healthCentersLoadedAt', new Date().toISOString());
+      
+      return combined;
     });
   };
 
@@ -420,6 +430,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
+  // Database information
+  const getDatabaseInfo = () => {
+    const source = localStorage.getItem('healthCentersSource') || 'unknown';
+    const loadedAt = localStorage.getItem('healthCentersLoadedAt') || 'unknown';
+    const permanentStats = getPermanentDatabaseStats();
+    
+    return {
+      isPermanentLoaded: source === 'permanent' || isPermanentLoaded,
+      permanentStats,
+      lastUpdated: loadedAt,
+      source,
+      currentCount: healthCenters.length
+    };
+  };
+
   return (
     <DataContext.Provider value={{
       healthCenters,
@@ -427,6 +452,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addHealthCenters,
       updateHealthCenter,
       deleteHealthCenter,
+      loadPermanentHealthCenters,
       users,
       setUsers,
       addUser,
@@ -443,6 +469,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateAlert,
       deleteAlert,
       getStatistics,
+      getDatabaseInfo,
       loading,
       setLoading
     }}>
