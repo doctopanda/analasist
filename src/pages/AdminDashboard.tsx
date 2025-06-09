@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import StatCard from '../components/StatCard';
 import ChartCard from '../components/ChartCard';
@@ -21,6 +22,7 @@ const reportsByMonth = [
 ];
 
 const AdminDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [showUserModal, setShowUserModal] = useState(false);
   const [showCenterModal, setShowCenterModal] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -67,6 +69,26 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
+  // Handle stat card clicks
+  const handleStatCardClick = (cardType: string) => {
+    switch (cardType) {
+      case 'users':
+        navigate('/admin/users');
+        break;
+      case 'centers':
+        navigate('/admin/health-centers');
+        break;
+      case 'reports':
+        navigate('/admin/reports');
+        break;
+      case 'alerts':
+        navigate('/admin/alerts');
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <Layout title="Panel de Administración">
       <div className="mb-6 flex justify-between items-center">
@@ -90,30 +112,38 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard 
-          title="Usuarios Totales" 
-          value={16} 
-          icon={Users} 
-          color="bg-blue-600"
-        />
-        <StatCard 
-          title="Centros de Salud" 
-          value={12} 
-          icon={Building2} 
-          color="bg-green-600"
-        />
-        <StatCard 
-          title="Reportes Totales" 
-          value={331} 
-          icon={FileText} 
-          color="bg-amber-600"
-        />
-        <StatCard 
-          title="Alertas Activas" 
-          value={3} 
-          icon={AlertTriangle} 
-          color="bg-red-600"
-        />
+        <div onClick={() => handleStatCardClick('users')} className="cursor-pointer">
+          <StatCard 
+            title="Usuarios Totales" 
+            value={16} 
+            icon={Users} 
+            color="bg-blue-600"
+          />
+        </div>
+        <div onClick={() => handleStatCardClick('centers')} className="cursor-pointer">
+          <StatCard 
+            title="Centros de Salud" 
+            value={12} 
+            icon={Building2} 
+            color="bg-green-600"
+          />
+        </div>
+        <div onClick={() => handleStatCardClick('reports')} className="cursor-pointer">
+          <StatCard 
+            title="Reportes Totales" 
+            value={331} 
+            icon={FileText} 
+            color="bg-amber-600"
+          />
+        </div>
+        <div onClick={() => handleStatCardClick('alerts')} className="cursor-pointer">
+          <StatCard 
+            title="Alertas Activas" 
+            value={3} 
+            icon={AlertTriangle} 
+            color="bg-red-600"
+          />
+        </div>
       </div>
 
       {/* Health Center Modal */}

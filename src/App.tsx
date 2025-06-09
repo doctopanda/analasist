@@ -13,6 +13,12 @@ import ReportForm from './pages/ReportForm';
 import HealthCentersPage from './pages/HealthCentersPage';
 import NotFound from './pages/NotFound';
 
+// Admin Management Pages
+import UsersManagement from './pages/UsersManagement';
+import HealthCentersManagement from './pages/HealthCentersManagement';
+import ReportsManagement from './pages/ReportsManagement';
+import AlertsManagement from './pages/AlertsManagement';
+
 function App() {
   return (
     <AuthProvider>
@@ -25,6 +31,31 @@ function App() {
           <Route path="/admin" element={
             <ProtectedRoute requiredRoles={['admin']}>
               <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          
+          {/* Admin Management Routes */}
+          <Route path="/admin/users" element={
+            <ProtectedRoute requiredRoles={['admin']}>
+              <UsersManagement />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/admin/health-centers" element={
+            <ProtectedRoute requiredRoles={['admin']}>
+              <HealthCentersManagement />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/admin/reports" element={
+            <ProtectedRoute requiredRoles={['admin']}>
+              <ReportsManagement />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/admin/alerts" element={
+            <ProtectedRoute requiredRoles={['admin']}>
+              <AlertsManagement />
             </ProtectedRoute>
           } />
           
