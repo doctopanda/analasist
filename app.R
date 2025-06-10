@@ -1,5 +1,6 @@
 # Health Centers Surveillance System - R Shiny Application
 # Sistema de Vigilancia Epidemiológica de Centros de Salud
+# Color Scheme: Pantone 7420 (#9d2449)
 
 library(shiny)
 library(shinydashboard)
@@ -98,11 +99,16 @@ health_centers <- load_permanent_health_centers()
 reports_data <- load_sample_reports()
 alerts_data <- load_sample_alerts()
 
-# Define UI
+# Define UI with Pantone 7420 color scheme
 ui <- dashboardPage(
-  dashboardHeader(title = "Sistema de Vigilancia Epidemiológica - Sonora"),
+  skin = "red",
+  dashboardHeader(
+    title = "Sistema de Vigilancia Epidemiológica - Sonora",
+    titleWidth = 400
+  ),
   
   dashboardSidebar(
+    width = 280,
     sidebarMenu(
       menuItem("Panel Principal", tabName = "dashboard", icon = icon("tachometer-alt")),
       menuItem("Centros de Salud", tabName = "health_centers", icon = icon("hospital")),
@@ -117,19 +123,261 @@ ui <- dashboardPage(
   dashboardBody(
     tags$head(
       tags$style(HTML("
+        /* Pantone 7420 Color Scheme */
+        :root {
+          --pantone-7420: #9d2449;
+          --pantone-7420-light: #c54d73;
+          --pantone-7420-dark: #7a1c37;
+          --pantone-7420-bg: #f8f1f4;
+        }
+        
+        /* Main layout styling */
         .content-wrapper, .right-side {
-          background-color: #f4f4f4;
+          background-color: var(--pantone-7420-bg);
         }
+        
+        /* Header styling */
+        .main-header .navbar {
+          background-color: var(--pantone-7420) !important;
+          border-bottom: 3px solid var(--pantone-7420-dark);
+        }
+        
+        .main-header .logo {
+          background-color: var(--pantone-7420-dark) !important;
+          color: white !important;
+          border-bottom: 3px solid var(--pantone-7420);
+        }
+        
+        .main-header .logo:hover {
+          background-color: var(--pantone-7420) !important;
+        }
+        
+        /* Sidebar styling */
+        .main-sidebar, .left-side {
+          background-color: var(--pantone-7420-dark) !important;
+        }
+        
+        .sidebar-menu > li > a {
+          color: #ffffff !important;
+          border-left: 3px solid transparent;
+          transition: all 0.3s ease;
+        }
+        
+        .sidebar-menu > li > a:hover,
+        .sidebar-menu > li.active > a {
+          background-color: var(--pantone-7420) !important;
+          border-left: 3px solid #ffffff;
+          color: #ffffff !important;
+        }
+        
+        .sidebar-menu > li > a > .fa,
+        .sidebar-menu > li > a > .glyphicon,
+        .sidebar-menu > li > a > .ion {
+          color: #ffffff !important;
+        }
+        
+        /* Box styling */
         .box {
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(157, 36, 73, 0.15);
+          border-top: 3px solid var(--pantone-7420);
+          transition: all 0.3s ease;
         }
+        
+        .box:hover {
+          box-shadow: 0 6px 20px rgba(157, 36, 73, 0.25);
+          transform: translateY(-2px);
+        }
+        
+        .box.box-primary .box-header {
+          background-color: var(--pantone-7420);
+          color: white;
+          border-radius: 12px 12px 0 0;
+        }
+        
+        .box.box-success .box-header {
+          background-color: #28a745;
+          color: white;
+          border-radius: 12px 12px 0 0;
+        }
+        
+        .box.box-warning .box-header {
+          background-color: #ffc107;
+          color: #212529;
+          border-radius: 12px 12px 0 0;
+        }
+        
+        .box.box-danger .box-header {
+          background-color: #dc3545;
+          color: white;
+          border-radius: 12px 12px 0 0;
+        }
+        
+        .box.box-info .box-header {
+          background-color: #17a2b8;
+          color: white;
+          border-radius: 12px 12px 0 0;
+        }
+        
+        /* Info box styling */
         .info-box {
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(157, 36, 73, 0.15);
+          border: 1px solid rgba(157, 36, 73, 0.1);
+          transition: all 0.3s ease;
         }
-        .leaflet-container {
+        
+        .info-box:hover {
+          box-shadow: 0 6px 20px rgba(157, 36, 73, 0.25);
+          transform: translateY(-2px);
+        }
+        
+        .info-box-icon {
+          border-radius: 12px 0 0 12px;
+        }
+        
+        .bg-blue {
+          background-color: var(--pantone-7420) !important;
+        }
+        
+        .bg-green {
+          background-color: #28a745 !important;
+        }
+        
+        .bg-red {
+          background-color: #dc3545 !important;
+        }
+        
+        .bg-yellow {
+          background-color: #ffc107 !important;
+        }
+        
+        .bg-orange {
+          background-color: #fd7e14 !important;
+        }
+        
+        /* Button styling */
+        .btn-primary {
+          background-color: var(--pantone-7420);
+          border-color: var(--pantone-7420);
           border-radius: 8px;
+          transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover,
+        .btn-primary:focus,
+        .btn-primary:active {
+          background-color: var(--pantone-7420-dark);
+          border-color: var(--pantone-7420-dark);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(157, 36, 73, 0.3);
+        }
+        
+        .btn-success {
+          border-radius: 8px;
+          transition: all 0.3s ease;
+        }
+        
+        .btn-success:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+        }
+        
+        /* Form controls */
+        .form-control {
+          border-radius: 8px;
+          border: 2px solid #e9ecef;
+          transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+          border-color: var(--pantone-7420);
+          box-shadow: 0 0 0 0.2rem rgba(157, 36, 73, 0.25);
+        }
+        
+        /* DataTables styling */
+        .dataTables_wrapper .dataTables_length select,
+        .dataTables_wrapper .dataTables_filter input {
+          border-radius: 8px;
+          border: 2px solid #e9ecef;
+        }
+        
+        .dataTables_wrapper .dataTables_filter input:focus {
+          border-color: var(--pantone-7420);
+          box-shadow: 0 0 0 0.2rem rgba(157, 36, 73, 0.25);
+        }
+        
+        .table-striped > tbody > tr:nth-of-type(odd) {
+          background-color: rgba(157, 36, 73, 0.05);
+        }
+        
+        /* Leaflet map styling */
+        .leaflet-container {
+          border-radius: 12px;
+          border: 3px solid var(--pantone-7420);
+        }
+        
+        /* Plotly chart styling */
+        .plotly .modebar {
+          background-color: rgba(157, 36, 73, 0.1) !important;
+          border-radius: 8px;
+        }
+        
+        /* Loading spinner */
+        .spinner-border {
+          color: var(--pantone-7420);
+        }
+        
+        /* Custom accent elements */
+        .accent-border {
+          border-left: 4px solid var(--pantone-7420);
+          padding-left: 15px;
+        }
+        
+        .accent-bg {
+          background: linear-gradient(135deg, var(--pantone-7420-bg) 0%, #ffffff 100%);
+          border-radius: 12px;
+          padding: 20px;
+        }
+        
+        /* Status badges */
+        .status-procesado {
+          background-color: #28a745 !important;
+          color: white !important;
+          border-radius: 20px;
+          padding: 4px 12px;
+          font-size: 0.85em;
+        }
+        
+        .status-pendiente {
+          background-color: #ffc107 !important;
+          color: #212529 !important;
+          border-radius: 20px;
+          padding: 4px 12px;
+          font-size: 0.85em;
+        }
+        
+        .status-revision {
+          background-color: #17a2b8 !important;
+          color: white !important;
+          border-radius: 20px;
+          padding: 4px 12px;
+          font-size: 0.85em;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+          .main-header .logo {
+            width: 200px;
+          }
+          
+          .main-sidebar {
+            width: 200px;
+          }
+          
+          .content-wrapper {
+            margin-left: 0;
+          }
         }
       "))
     ),
@@ -145,20 +393,20 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Reportes por Diagnóstico", status = "primary", solidHeader = TRUE,
-            width = 6, height = 400,
-            withSpinner(plotlyOutput("diagnosis_chart"))
+            width = 6, height = 450,
+            withSpinner(plotlyOutput("diagnosis_chart"), color = "#9d2449")
           ),
           box(
             title = "Centros por Tipo", status = "success", solidHeader = TRUE,
-            width = 6, height = 400,
-            withSpinner(plotlyOutput("centers_type_chart"))
+            width = 6, height = 450,
+            withSpinner(plotlyOutput("centers_type_chart"), color = "#9d2449")
           )
         ),
         fluidRow(
           box(
             title = "Actividad Reciente", status = "info", solidHeader = TRUE,
             width = 12,
-            withSpinner(DT::dataTableOutput("recent_activity"))
+            withSpinner(DT::dataTableOutput("recent_activity"), color = "#9d2449")
           )
         )
       ),
@@ -167,22 +415,24 @@ ui <- dashboardPage(
       tabItem(tabName = "health_centers",
         fluidRow(
           box(
-            title = "Filtros", status = "primary", solidHeader = TRUE,
+            title = "Filtros de Búsqueda", status = "primary", solidHeader = TRUE,
             width = 12, collapsible = TRUE,
-            fluidRow(
-              column(4,
-                textInput("search_centers", "Buscar Centro:", placeholder = "Nombre, dirección, CLUES...")
-              ),
-              column(4,
-                selectInput("filter_municipality", "Municipio:",
-                  choices = c("Todos" = "", unique(health_centers$municipio)),
-                  selected = ""
-                )
-              ),
-              column(4,
-                selectInput("filter_type", "Tipo:",
-                  choices = c("Todos" = "", unique(health_centers$tipo)),
-                  selected = ""
+            div(class = "accent-bg",
+              fluidRow(
+                column(4,
+                  textInput("search_centers", "Buscar Centro:", 
+                    placeholder = "Nombre, dirección, CLUES...",
+                    value = "")
+                ),
+                column(4,
+                  selectInput("filter_municipality", "Municipio:",
+                    choices = c("Todos" = "", unique(health_centers$municipio)),
+                    selected = "")
+                ),
+                column(4,
+                  selectInput("filter_type", "Tipo:",
+                    choices = c("Todos" = "", unique(health_centers$tipo)),
+                    selected = "")
                 )
               )
             )
@@ -192,7 +442,7 @@ ui <- dashboardPage(
           box(
             title = "Centros de Salud de Sonora", status = "success", solidHeader = TRUE,
             width = 12,
-            withSpinner(DT::dataTableOutput("health_centers_table"))
+            withSpinner(DT::dataTableOutput("health_centers_table"), color = "#9d2449")
           )
         )
       ),
@@ -201,16 +451,18 @@ ui <- dashboardPage(
       tabItem(tabName = "map",
         fluidRow(
           box(
-            title = "Mapa de Centros de Salud - Sonora", status = "primary", solidHeader = TRUE,
-            width = 12, height = 600,
-            withSpinner(leafletOutput("health_centers_map", height = 550))
+            title = "Mapa Interactivo de Centros de Salud - Sonora", status = "primary", solidHeader = TRUE,
+            width = 12, height = 650,
+            withSpinner(leafletOutput("health_centers_map", height = 600), color = "#9d2449")
           )
         ),
         fluidRow(
           box(
             title = "Estadísticas del Mapa", status = "info", solidHeader = TRUE,
             width = 12,
-            verbatimTextOutput("map_stats")
+            div(class = "accent-border",
+              verbatimTextOutput("map_stats")
+            )
           )
         )
       ),
@@ -226,26 +478,25 @@ ui <- dashboardPage(
           box(
             title = "Filtros de Reportes", status = "primary", solidHeader = TRUE,
             width = 12, collapsible = TRUE,
-            fluidRow(
-              column(3,
-                textInput("search_reports", "Buscar:", placeholder = "Folio, centro...")
-              ),
-              column(3,
-                selectInput("filter_diagnosis", "Diagnóstico:",
-                  choices = c("Todos" = "", unique(reports_data$diagnostico)),
-                  selected = ""
-                )
-              ),
-              column(3,
-                selectInput("filter_status", "Estado:",
-                  choices = c("Todos" = "", unique(reports_data$estado)),
-                  selected = ""
-                )
-              ),
-              column(3,
-                dateRangeInput("date_range", "Rango de Fechas:",
-                  start = min(reports_data$fecha_subida),
-                  end = max(reports_data$fecha_subida)
+            div(class = "accent-bg",
+              fluidRow(
+                column(3,
+                  textInput("search_reports", "Buscar:", placeholder = "Folio, centro...")
+                ),
+                column(3,
+                  selectInput("filter_diagnosis", "Diagnóstico:",
+                    choices = c("Todos" = "", unique(reports_data$diagnostico)),
+                    selected = "")
+                ),
+                column(3,
+                  selectInput("filter_status", "Estado:",
+                    choices = c("Todos" = "", unique(reports_data$estado)),
+                    selected = "")
+                ),
+                column(3,
+                  dateRangeInput("date_range", "Rango de Fechas:",
+                    start = min(reports_data$fecha_subida),
+                    end = max(reports_data$fecha_subida))
                 )
               )
             )
@@ -255,7 +506,7 @@ ui <- dashboardPage(
           box(
             title = "Reportes SUIVE", status = "warning", solidHeader = TRUE,
             width = 12,
-            withSpinner(DT::dataTableOutput("reports_table"))
+            withSpinner(DT::dataTableOutput("reports_table"), color = "#9d2449")
           )
         )
       ),
@@ -271,12 +522,12 @@ ui <- dashboardPage(
           box(
             title = "Alertas Epidemiológicas", status = "danger", solidHeader = TRUE,
             width = 8,
-            withSpinner(DT::dataTableOutput("alerts_table"))
+            withSpinner(DT::dataTableOutput("alerts_table"), color = "#9d2449")
           ),
           box(
             title = "Mapa de Alertas", status = "warning", solidHeader = TRUE,
-            width = 4, height = 400,
-            withSpinner(leafletOutput("alerts_map", height = 350))
+            width = 4, height = 450,
+            withSpinner(leafletOutput("alerts_map", height = 400), color = "#9d2449")
           )
         )
       ),
@@ -287,23 +538,22 @@ ui <- dashboardPage(
           box(
             title = "Configuración de Análisis", status = "primary", solidHeader = TRUE,
             width = 12, collapsible = TRUE,
-            fluidRow(
-              column(4,
-                dateRangeInput("analysis_dates", "Período de Análisis:",
-                  start = Sys.Date() - 30,
-                  end = Sys.Date()
-                )
-              ),
-              column(4,
-                selectInput("analysis_diagnosis", "Diagnóstico:",
-                  choices = c("Todos" = "all", unique(reports_data$diagnostico)),
-                  selected = "all"
-                )
-              ),
-              column(4,
-                selectInput("analysis_level", "Nivel de Análisis:",
-                  choices = c("Estatal" = "state", "Municipal" = "municipal", "Distrital" = "district"),
-                  selected = "state"
+            div(class = "accent-bg",
+              fluidRow(
+                column(4,
+                  dateRangeInput("analysis_dates", "Período de Análisis:",
+                    start = Sys.Date() - 30,
+                    end = Sys.Date())
+                ),
+                column(4,
+                  selectInput("analysis_diagnosis", "Diagnóstico:",
+                    choices = c("Todos" = "all", unique(reports_data$diagnostico)),
+                    selected = "all")
+                ),
+                column(4,
+                  selectInput("analysis_level", "Nivel de Análisis:",
+                    choices = c("Estatal" = "state", "Municipal" = "municipal", "Distrital" = "district"),
+                    selected = "state")
                 )
               )
             )
@@ -312,25 +562,27 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Tendencia Temporal", status = "success", solidHeader = TRUE,
-            width = 8, height = 400,
-            withSpinner(plotlyOutput("temporal_trend"))
+            width = 8, height = 450,
+            withSpinner(plotlyOutput("temporal_trend"), color = "#9d2449")
           ),
           box(
-            title = "Estadísticas", status = "info", solidHeader = TRUE,
-            width = 4, height = 400,
-            verbatimTextOutput("analysis_stats")
+            title = "Estadísticas Descriptivas", status = "info", solidHeader = TRUE,
+            width = 4, height = 450,
+            div(class = "accent-border",
+              verbatimTextOutput("analysis_stats")
+            )
           )
         ),
         fluidRow(
           box(
             title = "Distribución Geográfica", status = "warning", solidHeader = TRUE,
-            width = 6, height = 400,
-            withSpinner(plotlyOutput("geographic_distribution"))
+            width = 6, height = 450,
+            withSpinner(plotlyOutput("geographic_distribution"), color = "#9d2449")
           ),
           box(
-            title = "Distribución por Edad y Sexo", status = "primary", solidHeader = TRUE,
-            width = 6, height = 400,
-            withSpinner(plotlyOutput("demographic_distribution"))
+            title = "Distribución Demográfica", status = "primary", solidHeader = TRUE,
+            width = 6, height = 450,
+            withSpinner(plotlyOutput("demographic_distribution"), color = "#9d2449")
           )
         )
       ),
@@ -341,41 +593,46 @@ ui <- dashboardPage(
           box(
             title = "Cargar Datos de Centros de Salud", status = "primary", solidHeader = TRUE,
             width = 6,
-            fileInput("upload_centers", "Seleccionar archivo Excel/CSV:",
-              accept = c(".xlsx", ".xls", ".csv")
-            ),
-            br(),
-            actionButton("load_permanent", "Cargar Base Permanente", 
-              class = "btn-success", icon = icon("database")),
-            br(), br(),
-            verbatimTextOutput("upload_status")
+            div(class = "accent-bg",
+              fileInput("upload_centers", "Seleccionar archivo Excel/CSV:",
+                accept = c(".xlsx", ".xls", ".csv")),
+              br(),
+              actionButton("load_permanent", "Cargar Base Permanente", 
+                class = "btn-success", icon = icon("database")),
+              br(), br(),
+              div(class = "accent-border",
+                verbatimTextOutput("upload_status")
+              )
+            )
           ),
           box(
-            title = "Información", status = "info", solidHeader = TRUE,
+            title = "Información del Sistema", status = "info", solidHeader = TRUE,
             width = 6,
-            h4("Formatos Soportados:"),
-            tags$ul(
-              tags$li("Excel (.xlsx, .xls)"),
-              tags$li("CSV (.csv)")
-            ),
-            h4("Columnas Requeridas:"),
-            tags$ul(
-              tags$li("nombre - Nombre del centro"),
-              tags$li("direccion - Dirección completa"),
-              tags$li("municipio - Municipio"),
-              tags$li("tipo - Tipo de establecimiento"),
-              tags$li("lat - Latitud"),
-              tags$li("lng - Longitud")
-            ),
-            h4("Base de Datos Permanente:"),
-            p("Contiene 1649+ centros de salud de Sonora pre-cargados en el sistema.")
+            div(class = "accent-bg",
+              h4("📊 Formatos Soportados:", style = "color: #9d2449;"),
+              tags$ul(
+                tags$li("Excel (.xlsx, .xls)"),
+                tags$li("CSV (.csv)")
+              ),
+              h4("📋 Columnas Requeridas:", style = "color: #9d2449;"),
+              tags$ul(
+                tags$li("nombre - Nombre del centro"),
+                tags$li("direccion - Dirección completa"),
+                tags$li("municipio - Municipio"),
+                tags$li("tipo - Tipo de establecimiento"),
+                tags$li("lat - Latitud"),
+                tags$li("lng - Longitud")
+              ),
+              h4("🗄️ Base de Datos Permanente:", style = "color: #9d2449;"),
+              p("Contiene 1649+ centros de salud de Sonora pre-cargados en el sistema.")
+            )
           )
         ),
         fluidRow(
           box(
             title = "Vista Previa de Datos", status = "success", solidHeader = TRUE,
             width = 12,
-            withSpinner(DT::dataTableOutput("preview_data"))
+            withSpinner(DT::dataTableOutput("preview_data"), color = "#9d2449")
           )
         )
       )
@@ -416,20 +673,26 @@ server <- function(input, output, session) {
     )
   })
   
-  # Dashboard Charts
+  # Dashboard Charts with Pantone 7420 color scheme
   output$diagnosis_chart <- renderPlotly({
     diagnosis_counts <- values$reports %>%
       count(diagnostico) %>%
       arrange(desc(n))
     
-    p <- ggplot(diagnosis_counts, aes(x = reorder(diagnostico, n), y = n, fill = diagnostico)) +
-      geom_bar(stat = "identity") +
-      coord_flip() +
-      labs(title = "Reportes por Diagnóstico", x = "Diagnóstico", y = "Número de Reportes") +
-      theme_minimal() +
-      theme(legend.position = "none")
+    p <- plot_ly(diagnosis_counts, 
+                 x = ~reorder(diagnostico, n), 
+                 y = ~n, 
+                 type = 'bar',
+                 marker = list(color = '#9d2449',
+                              line = list(color = '#7a1c37', width = 1))) %>%
+      layout(title = list(text = "Reportes por Diagnóstico", 
+                         font = list(color = '#9d2449', size = 16)),
+             xaxis = list(title = "Diagnóstico"),
+             yaxis = list(title = "Número de Reportes"),
+             plot_bgcolor = 'rgba(0,0,0,0)',
+             paper_bgcolor = 'rgba(0,0,0,0)')
     
-    ggplotly(p)
+    p
   })
   
   output$centers_type_chart <- renderPlotly({
@@ -437,9 +700,21 @@ server <- function(input, output, session) {
       count(tipo) %>%
       arrange(desc(n))
     
-    p <- plot_ly(type_counts, labels = ~tipo, values = ~n, type = 'pie',
-                 textposition = 'inside', textinfo = 'label+percent') %>%
-      layout(title = "Distribución de Centros por Tipo")
+    colors <- c('#9d2449', '#c54d73', '#7a1c37', '#f8f1f4')
+    
+    p <- plot_ly(type_counts, 
+                 labels = ~tipo, 
+                 values = ~n, 
+                 type = 'pie',
+                 marker = list(colors = colors,
+                              line = list(color = '#FFFFFF', width = 2)),
+                 textposition = 'inside', 
+                 textinfo = 'label+percent') %>%
+      layout(title = list(text = "Distribución de Centros por Tipo",
+                         font = list(color = '#9d2449', size = 16)),
+             showlegend = TRUE,
+             plot_bgcolor = 'rgba(0,0,0,0)',
+             paper_bgcolor = 'rgba(0,0,0,0)')
     
     p
   })
@@ -451,7 +726,16 @@ server <- function(input, output, session) {
       head(10) %>%
       select(folio, fecha_subida, centro_salud, diagnostico, estado)
     
-    DT::datatable(recent, options = list(pageLength = 10, searching = FALSE))
+    DT::datatable(recent, 
+                  options = list(pageLength = 10, 
+                                searching = FALSE,
+                                dom = 'tp'),
+                  rownames = FALSE) %>%
+      formatStyle("estado",
+        backgroundColor = styleEqual(
+          c("procesado", "pendiente", "revision"),
+          c("#d4edda", "#fff3cd", "#d1ecf1")
+        ))
   })
   
   # Health Centers Table
@@ -480,15 +764,18 @@ server <- function(input, output, session) {
       filtered_centers() %>% select(nombre, municipio, tipo, direccion, telefono, responsable),
       options = list(pageLength = 15, scrollX = TRUE),
       rownames = FALSE
-    )
+    ) %>%
+      formatStyle(columns = 1:6, 
+                  backgroundColor = '#f8f1f4',
+                  border = '1px solid #9d2449')
   })
   
-  # Health Centers Map
+  # Health Centers Map with custom styling
   output$health_centers_map <- renderLeaflet({
     data <- values$health_centers
     
-    # Color palette for different types
-    colors <- c("Hospital" = "red", "Centro de Salud" = "blue", "Clínica" = "green")
+    # Custom color palette using Pantone 7420 variations
+    colors <- c("Hospital" = "#9d2449", "Centro de Salud" = "#c54d73", "Clínica" = "#7a1c37")
     
     leaflet(data) %>%
       addTiles() %>%
@@ -496,19 +783,27 @@ server <- function(input, output, session) {
       addCircleMarkers(
         lng = ~lng, lat = ~lat,
         color = ~colors[tipo],
-        radius = 8,
-        popup = ~paste("<strong>", nombre, "</strong><br>",
-                      "Tipo:", tipo, "<br>",
-                      "Municipio:", municipio, "<br>",
-                      "Dirección:", direccion, "<br>",
-                      "Teléfono:", telefono),
+        fillColor = ~colors[tipo],
+        radius = 10,
+        fillOpacity = 0.8,
+        stroke = TRUE,
+        weight = 2,
+        popup = ~paste("<div style='font-family: Arial; max-width: 300px;'>",
+                      "<h4 style='color: #9d2449; margin-bottom: 10px;'>", nombre, "</h4>",
+                      "<p><strong>Tipo:</strong> ", tipo, "</p>",
+                      "<p><strong>Municipio:</strong> ", municipio, "</p>",
+                      "<p><strong>Dirección:</strong> ", direccion, "</p>",
+                      "<p><strong>Teléfono:</strong> ", telefono, "</p>",
+                      "<p><strong>Responsable:</strong> ", responsable, "</p>",
+                      "</div>"),
         label = ~nombre
       ) %>%
       addLegend(
         position = "bottomright",
-        colors = c("red", "blue", "green"),
+        colors = c("#9d2449", "#c54d73", "#7a1c37"),
         labels = c("Hospital", "Centro de Salud", "Clínica"),
-        title = "Tipo de Centro"
+        title = "Tipo de Centro",
+        opacity = 0.8
       )
   })
   
@@ -516,11 +811,15 @@ server <- function(input, output, session) {
   output$map_stats <- renderText({
     data <- values$health_centers
     paste(
-      "Total de centros en el mapa:", nrow(data), "\n",
-      "Hospitales:", sum(data$tipo == "Hospital"), "\n",
-      "Centros de Salud:", sum(data$tipo == "Centro de Salud"), "\n",
-      "Clínicas:", sum(data$tipo == "Clínica"), "\n",
-      "Municipios representados:", length(unique(data$municipio))
+      "📊 ESTADÍSTICAS DEL MAPA\n",
+      "═══════════════════════════════\n",
+      "🏥 Total de centros:", nrow(data), "\n",
+      "🔴 Hospitales:", sum(data$tipo == "Hospital"), "\n",
+      "🔵 Centros de Salud:", sum(data$tipo == "Centro de Salud"), "\n",
+      "🟢 Clínicas:", sum(data$tipo == "Clínica"), "\n",
+      "📍 Municipios representados:", length(unique(data$municipio)), "\n",
+      "🗺️ Cobertura estatal: Sonora\n",
+      "═══════════════════════════════"
     )
   })
   
@@ -583,9 +882,8 @@ server <- function(input, output, session) {
       formatStyle("estado",
         backgroundColor = styleEqual(
           c("procesado", "pendiente", "revision"),
-          c("lightgreen", "lightyellow", "lightblue")
-        )
-      )
+          c("#d4edda", "#fff3cd", "#d1ecf1")
+        ))
   })
   
   # Alerts Tab Info Boxes
@@ -623,17 +921,20 @@ server <- function(input, output, session) {
       formatStyle("severidad",
         backgroundColor = styleEqual(
           c("baja", "media", "alta", "critica"),
-          c("lightgreen", "lightyellow", "orange", "red")
-        )
-      )
+          c("#d4edda", "#fff3cd", "#f8d7da", "#721c24")
+        ),
+        color = styleEqual(
+          c("baja", "media", "alta", "critica"),
+          c("#155724", "#856404", "#721c24", "#ffffff")
+        ))
   })
   
   # Alerts Map
   output$alerts_map <- renderLeaflet({
     data <- values$alerts
     
-    # Color palette for severity
-    severity_colors <- c("baja" = "green", "media" = "yellow", "alta" = "orange", "critica" = "red")
+    # Severity colors using Pantone 7420 variations
+    severity_colors <- c("baja" = "#28a745", "media" = "#ffc107", "alta" = "#fd7e14", "critica" = "#9d2449")
     
     leaflet(data) %>%
       addTiles() %>%
@@ -641,41 +942,58 @@ server <- function(input, output, session) {
       addCircleMarkers(
         lng = ~lng, lat = ~lat,
         color = ~severity_colors[severidad],
-        radius = ~casos_detectados * 2,
-        popup = ~paste("<strong>", titulo, "</strong><br>",
-                      "Municipio:", municipio, "<br>",
-                      "Diagnóstico:", diagnostico, "<br>",
-                      "Casos:", casos_detectados, "<br>",
-                      "Severidad:", severidad),
+        fillColor = ~severity_colors[severidad],
+        radius = ~casos_detectados * 3,
+        fillOpacity = 0.7,
+        stroke = TRUE,
+        weight = 2,
+        popup = ~paste("<div style='font-family: Arial; max-width: 300px;'>",
+                      "<h4 style='color: #9d2449; margin-bottom: 10px;'>", titulo, "</h4>",
+                      "<p><strong>Municipio:</strong> ", municipio, "</p>",
+                      "<p><strong>Diagnóstico:</strong> ", diagnostico, "</p>",
+                      "<p><strong>Casos:</strong> ", casos_detectados, "</p>",
+                      "<p><strong>Severidad:</strong> ", severidad, "</p>",
+                      "<p><strong>Estado:</strong> ", estado, "</p>",
+                      "</div>"),
         label = ~titulo
       )
   })
   
-  # Analysis Charts
+  # Analysis Charts with Pantone 7420 styling
   output$temporal_trend <- renderPlotly({
     # Create sample temporal data
     dates <- seq(from = as.Date("2024-01-01"), to = Sys.Date(), by = "week")
     cases <- sample(5:25, length(dates), replace = TRUE)
     temporal_data <- data.frame(fecha = dates, casos = cases)
     
-    p <- ggplot(temporal_data, aes(x = fecha, y = casos)) +
-      geom_line(color = "blue", size = 1) +
-      geom_point(color = "red", size = 2) +
-      labs(title = "Tendencia Temporal de Casos", x = "Fecha", y = "Número de Casos") +
-      theme_minimal()
+    p <- plot_ly(temporal_data, 
+                 x = ~fecha, 
+                 y = ~casos, 
+                 type = 'scatter', 
+                 mode = 'lines+markers',
+                 line = list(color = '#9d2449', width = 3),
+                 marker = list(color = '#7a1c37', size = 8)) %>%
+      layout(title = list(text = "Tendencia Temporal de Casos",
+                         font = list(color = '#9d2449', size = 16)),
+             xaxis = list(title = "Fecha"),
+             yaxis = list(title = "Número de Casos"),
+             plot_bgcolor = 'rgba(0,0,0,0)',
+             paper_bgcolor = 'rgba(0,0,0,0)')
     
-    ggplotly(p)
+    p
   })
   
   output$analysis_stats <- renderText({
     paste(
-      "Estadísticas del Período Seleccionado:\n\n",
-      "Total de casos:", nrow(values$reports), "\n",
-      "Promedio semanal:", round(nrow(values$reports) / 4, 1), "\n",
-      "Diagnóstico más frecuente:", names(sort(table(values$reports$diagnostico), decreasing = TRUE))[1], "\n",
-      "Municipio más afectado:", names(sort(table(values$reports$municipio), decreasing = TRUE))[1], "\n",
-      "Tasa de crecimiento: +5.2%\n",
-      "Variación semanal: ±3.8 casos"
+      "📊 ESTADÍSTICAS DEL PERÍODO\n",
+      "═══════════════════════════════\n",
+      "📈 Total de casos:", nrow(values$reports), "\n",
+      "📅 Promedio semanal:", round(nrow(values$reports) / 4, 1), "\n",
+      "🔍 Diagnóstico más frecuente:", names(sort(table(values$reports$diagnostico), decreasing = TRUE))[1], "\n",
+      "📍 Municipio más afectado:", names(sort(table(values$reports$municipio), decreasing = TRUE))[1], "\n",
+      "📊 Tasa de crecimiento: +5.2%\n",
+      "📈 Variación semanal: ±3.8 casos\n",
+      "═══════════════════════════════"
     )
   })
   
@@ -684,14 +1002,20 @@ server <- function(input, output, session) {
       count(municipio) %>%
       arrange(desc(n))
     
-    p <- ggplot(geo_data, aes(x = reorder(municipio, n), y = n, fill = municipio)) +
-      geom_bar(stat = "identity") +
-      coord_flip() +
-      labs(title = "Casos por Municipio", x = "Municipio", y = "Número de Casos") +
-      theme_minimal() +
-      theme(legend.position = "none")
+    p <- plot_ly(geo_data, 
+                 x = ~reorder(municipio, n), 
+                 y = ~n, 
+                 type = 'bar',
+                 marker = list(color = '#c54d73',
+                              line = list(color = '#9d2449', width = 1))) %>%
+      layout(title = list(text = "Casos por Municipio",
+                         font = list(color = '#9d2449', size = 16)),
+             xaxis = list(title = "Municipio"),
+             yaxis = list(title = "Número de Casos"),
+             plot_bgcolor = 'rgba(0,0,0,0)',
+             paper_bgcolor = 'rgba(0,0,0,0)')
     
-    ggplotly(p)
+    p
   })
   
   output$demographic_distribution <- renderPlotly({
@@ -700,12 +1024,23 @@ server <- function(input, output, session) {
                              labels = c("0-17", "18-34", "35-49", "50-64", "65+"))) %>%
       count(grupo_edad, sexo)
     
-    p <- ggplot(demo_data, aes(x = grupo_edad, y = n, fill = sexo)) +
-      geom_bar(stat = "identity", position = "dodge") +
-      labs(title = "Distribución por Edad y Sexo", x = "Grupo de Edad", y = "Número de Casos") +
-      theme_minimal()
+    colors <- c("M" = "#9d2449", "F" = "#c54d73")
     
-    ggplotly(p)
+    p <- plot_ly(demo_data, 
+                 x = ~grupo_edad, 
+                 y = ~n, 
+                 color = ~sexo,
+                 colors = colors,
+                 type = 'bar') %>%
+      layout(title = list(text = "Distribución por Edad y Sexo",
+                         font = list(color = '#9d2449', size = 16)),
+             xaxis = list(title = "Grupo de Edad"),
+             yaxis = list(title = "Número de Casos"),
+             barmode = 'group',
+             plot_bgcolor = 'rgba(0,0,0,0)',
+             paper_bgcolor = 'rgba(0,0,0,0)')
+    
+    p
   })
   
   # File Upload Functionality
@@ -742,14 +1077,21 @@ server <- function(input, output, session) {
       values$health_centers <- rbind(values$health_centers, new_data)
       
       output$upload_status <- renderText({
-        paste("✓ Archivo cargado exitosamente!\n",
-              "Centros agregados:", nrow(new_data), "\n",
-              "Total de centros:", nrow(values$health_centers))
+        paste("✅ ARCHIVO CARGADO EXITOSAMENTE!\n",
+              "═══════════════════════════════\n",
+              "📊 Centros agregados:", nrow(new_data), "\n",
+              "🏥 Total de centros:", nrow(values$health_centers), "\n",
+              "📅 Fecha de carga:", Sys.time(), "\n",
+              "═══════════════════════════════")
       })
       
     }, error = function(e) {
       output$upload_status <- renderText({
-        paste("✗ Error al cargar archivo:\n", e$message)
+        paste("❌ ERROR AL CARGAR ARCHIVO\n",
+              "═══════════════════════════════\n",
+              "🚫 Error:", e$message, "\n",
+              "💡 Verifique el formato del archivo\n",
+              "═══════════════════════════════")
       })
     })
   })
@@ -777,9 +1119,13 @@ server <- function(input, output, session) {
     values$health_centers <- rbind(values$health_centers, additional_centers)
     
     output$upload_status <- renderText({
-      paste("✓ Base de datos permanente cargada!\n",
-            "Centros agregados:", nrow(additional_centers), "\n",
-            "Total de centros:", nrow(values$health_centers))
+      paste("✅ BASE PERMANENTE CARGADA!\n",
+            "═══════════════════════════════\n",
+            "🗄️ Centros agregados:", nrow(additional_centers), "\n",
+            "🏥 Total de centros:", nrow(values$health_centers), "\n",
+            "📊 Base de datos: 1649+ centros disponibles\n",
+            "📅 Fecha de carga:", Sys.time(), "\n",
+            "═══════════════════════════════")
     })
   })
   
@@ -789,7 +1135,10 @@ server <- function(input, output, session) {
       values$health_centers %>% head(20),
       options = list(pageLength = 10, scrollX = TRUE),
       rownames = FALSE
-    )
+    ) %>%
+      formatStyle(columns = 1:ncol(values$health_centers), 
+                  backgroundColor = '#f8f1f4',
+                  border = '1px solid #9d2449')
   })
 }
 
