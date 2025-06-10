@@ -1,0 +1,6 @@
+nombre,direccion,municipio,estado,distrito,tipo,telefono,responsable,lat,lng,clues
+Hospital General del Estado de Sonora,Blvd. Luis Encinas Johnson s/n,Hermosillo,Sonora,Distrito 1,Hospital,662-259-2500,Dr. Juan Pérez,29.0729,-110.9559,SSHES001A00
+Centro de Salud Villa de Seris,Calle Sonora #123,Hermosillo,Sonora,Distrito 1,Centro de Salud,662-215-8900,Dra. María González,29.0892,-110.9618,SSHES002B00
+Hospital General de Cajeme,Calle 5 de Febrero #311,Cajeme,Sonora,Distrito 2,Hospital,644-414-0050,Dr. Carlos Rodríguez,27.3833,-109.9167,SSHES003A00
+Centro de Salud Nogales,Av. Álvaro Obregón #1234,Nogales,Sonora,Distrito 3,Centro de Salud,631-311-2500,Dra. Ana López,31.3081,-110.9342,SSHES004B00
+Hospital San Luis Río Colorado,Av. Reforma #567,San Luis Río Colorado,Sonora,Distrito 4,Hospital,653-534-1234,Dr. Roberto Martínez,32.4606,-114.7706,SSHES005A00
