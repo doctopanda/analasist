@@ -1,145 +1,123 @@
-# POPIS 4.0
+# POPIS 4.1
 
 **Procesador Operativo de Patógenos e Indicadores Sanitarios**
 
-Aplicación local en Python + Streamlit para vigilancia de Enfermedad Diarreica Aguda (EDA), orientada al análisis conjunto de **SUIVE/SUAVE** y **SINAVE EDA**.
+Aplicación local Python + Streamlit para vigilancia de EDA en Sonora, integrando **SUIVE/SUAVE**, **SINAVE EDA**, CONAPO, indicadores, territorio y control de calidad.
 
-## Qué hace
+## Cambio principal de 4.1: los datos viven localmente en POPIS
 
-- SUIVE/SUAVE: magnitud, tendencia, acumulados, comparativo histórico y canal endémico.
-- SINAVE: registros nominales, patógenos, mortalidad, letalidad y series semanales.
-- Comparador SUIVE ↔ SINAVE: diferencias, razón entre sistemas y correlaciones.
-- Canal endémico dinámico SUIVE y SINAVE, incluyendo selección de patógeno y años históricos.
-- Análisis territorial por municipio de residencia.
-- Mapa municipal de Sonora con geometría oficial del servicio web de INEGI.
-- Indicadores mensuales NuTraVE y de laboratorio con numerador, denominador, resultado, meta y cumplimiento.
-- Auditor de definiciones operacionales EDA moderada/grave.
-- Exportación de tablas a Excel.
-- Descarga individual de gráficas PNG y descarga masiva en ZIP.
-- Mapas Plotly con botón de cámara para descargar PNG desde el navegador.
-
-## Instalación en Windows
-
-1. Descarga/descomprime la carpeta `POPIS_4_0` en una ruta sencilla, por ejemplo `C:\POPIS4`.
-2. Ejecuta `INICIAR_POPIS.bat`.
-3. La primera ejecución crea un entorno virtual aislado en `%LOCALAPPDATA%\POPIS4\venv`.
-4. POPIS abre en `http://127.0.0.1:8501`.
-
-El entorno corto evita el problema de rutas excesivamente largas observado con Python instalado desde Microsoft Store.
-
-## Rutina semanal recomendada
-
-No es necesario modificar los históricos cada semana.
-
-1. Conserva tu histórico SUIVE/SUAVE.
-2. Actualiza la información del año en curso en el archivo SUIVE, o carga el nuevo archivo que ya contenga la semana más reciente.
-3. Carga las bases históricas SINAVE una sola vez por sesión y la base actualizada del año en curso.
-4. Selecciona año y semana epidemiológica.
-5. POPIS recalcula todos los módulos.
-
-## Archivos de entrada
-
-### SUIVE/SUAVE
-
-POPIS busca automáticamente la hoja `SUIVE` y detecta filas que contienen un año y al menos 20 valores semanales. El resultado se normaliza a:
-
-- Año
-- Semana epidemiológica
-- Casos
-
-Si un archivo tiene una estructura distinta, el módulo mostrará un error en lugar de inventar datos.
-
-### SINAVE EDA
-
-Acepta XLS real, XLSX, CSV y también exportaciones tabuladas que llevan extensión `.xls`. El lector detecta automáticamente ese caso.
-
-Las variables se buscan por alias. Entre las principales:
-
-- `SemanaInicio`
-- `Fec_captura`
-- `Fec_Primer_Contacto`
-- `Fec_Dx_Final`
-- `Diag_Final`
-- `FecDefuncion`
-- `Mun_Res`
-- `CLUES`
-- `NuTraVE`
-- campos de muestras y laboratorio
-- resultados de Salmonella, Shigella, Rotavirus, Vibrio y E. coli
-
-## Indicadores incluidos
-
-### NuTraVE
-
-- Notificación oportuna de EDA, meta 100%.
-- Clasificación oportuna de EDA, meta 80%.
-- Cobertura de notificación, meta 80%.
-- Muestreo de EDA en menores de 5 años, meta 80%.
-- Muestreo de EDA en personas de 5 años o más, meta 80%.
-
-### Laboratorio
-
-- Muestras rechazadas.
-- Toma oportuna bacteriana.
-- Toma oportuna viral.
-- Envío oportuno bacteriano.
-- Envío oportuno viral.
-
-Los indicadores se muestran con numerador y denominador para permitir auditoría.
-
-## Importante sobre SUIVE vs SINAVE
-
-POPIS **no suma** SUIVE y SINAVE ni interpreta automáticamente la diferencia como subregistro. Los sistemas tienen objetivos y universos distintos. El módulo comparador estudia la relación temporal entre ambos mediante:
-
-- diferencia absoluta;
-- razón SINAVE/SUIVE;
-- correlación de Pearson;
-- correlación de Spearman.
-
-## Población y tasas
-
-POPIS permite cargar un archivo de población CONAPO. Para el análisis territorial intenta reconocer columnas equivalentes a:
-
-- Municipio
-- Año
-- Población
-
-Cuando están disponibles, calcula incidencia y mortalidad por 100,000 habitantes.
-
-Fuente demográfica recomendada:
-
-- CONAPO / datos.gob.mx: reconstrucción y proyecciones municipales de población 1990-2040.
-
-## Cartografía
-
-El mapa consulta en tiempo real el servicio web oficial de INEGI para las Áreas Geoestadísticas Municipales de Sonora:
-
-`https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgem/26`
-
-Si no hay conexión a internet, las tablas territoriales continúan funcionando y únicamente el mapa queda temporalmente no disponible.
-
-## Privacidad
-
-Las bases nominales se cargan en la sesión local de Streamlit. **No subas bases nominales con datos personales a repositorios públicos.** Este repositorio contiene únicamente el motor de análisis.
-
-## Estructura
+Ya no es necesario cargar todos los archivos cada vez que se abre el tablero.
 
 ```text
 POPIS_4_0/
-├── app.py
+├── data/
+│   ├── sinave/
+│   │   ├── historico/       ← se actualiza una vez al año
+│   │   └── actual/          ← se reemplaza una vez por semana
+│   ├── suive/
+│   │   ├── historico/       ← se actualiza una vez al año
+│   │   └── actual/          ← se reemplaza una vez por semana
+│   └── poblacion/           ← CONAPO
+├── app_v41.py
+├── app_bootstrap.py
 ├── popis_core.py
-├── requirements.txt
+├── popis_core_patch.py
+├── popis_data.py
+├── CONFIGURAR_DATOS_INICIALES.bat
+├── CERRAR_ANIO.bat
 ├── INICIAR_POPIS.bat
-├── REPARAR_POPIS.bat
-├── DIAGNOSTICO_POPIS.bat
-└── README.md
+└── REPARAR_POPIS.bat
 ```
 
-## Próximos módulos previstos
+Las carpetas `data/` y `IMPORTAR/` están excluidas de Git para impedir publicar accidentalmente bases nominales.
 
-- meta normativa del monitoreo del 2% vinculando SUIVE histórico con SINAVE;
-- Red Negativa de Cólera;
-- distritos y regiones de Sonora;
-- tasas específicas por edad y sexo;
-- detección de hotspots con estabilización para poblaciones pequeñas;
-- informe ejecutivo automático en Word/PDF.
+## Primera instalación
+
+1. Descomprime POPIS en una ruta sencilla, por ejemplo `C:\POPIS4`.
+2. Crea/abre la carpeta `IMPORTAR` ejecutando `CONFIGURAR_DATOS_INICIALES.bat` una primera vez.
+3. Coloca allí los archivos iniciales.
+4. Ejecuta nuevamente `CONFIGURAR_DATOS_INICIALES.bat`.
+5. Ejecuta `INICIAR_POPIS.bat`.
+
+También puedes cargar históricos y actualizaciones desde la barra lateral del tablero. Los archivos se guardan localmente.
+
+## Rutina semanal
+
+Solo hay dos movimientos:
+
+- reemplazar `SINAVE actual` con la exportación nominal más reciente;
+- reemplazar `SUIVE actual` con el reporte más reciente.
+
+Desde el tablero: **Actualización semanal → Guardar como SINAVE/SUIVE actual**.
+
+POPIS vuelve a leer los históricos congelados y combina automáticamente el nuevo corte.
+
+## Cierre anual
+
+Ejecuta `CERRAR_ANIO.bat` o agrega el archivo anual desde la sección de mantenimiento. El cierre copia los archivos actuales al histórico y no borra la fuente original.
+
+## Correcciones de calidad incorporadas
+
+### Año epidemiológico separado del año calendario
+
+Las bases reales pueden contener casos de los primeros días de enero con `SemanaInicio=52/53`. POPIS **no cambia la semana capturada**. En su lugar calcula `epi_year`:
+
+- SE52/53 + inicio en enero → año epidemiológico anterior;
+- SE1 + inicio en diciembre → año epidemiológico siguiente;
+- resto → año del inicio de síntomas.
+
+Esto evita que una SE53 de cierre quede artificialmente colocada al final del nuevo año.
+
+### Municipios
+
+Se homologan variantes frecuentes antes de unir con CONAPO, por ejemplo:
+
+- `BENITO JUAREZ   SON` → `Benito Juárez`;
+- `ROSARIO SON` → `Rosario`;
+- `COLORADA LA` → `La Colorada`.
+
+Las tasas territoriales usan **municipio de residencia** y excluyen del denominador Sonora a residentes de otras entidades, aunque esos registros siguen disponibles en los conteos generales de vigilancia.
+
+### Muestras rechazadas
+
+Los rechazos se identifican tanto por diagnóstico final como por campos de calidad de laboratorio. La bitácora distingue el evento operativo del resultado negativo.
+
+### Duplicados entre archivos
+
+Si el mismo folio aparece en histórico y actual, POPIS conserva la versión más reciente y lo registra como observación de calidad.
+
+## Bitácora de calidad
+
+La pestaña `🔍 Calidad y auditoría` revisa, entre otros:
+
+- semana inválida;
+- cruces de año epidemiológico;
+- fechas de captura anteriores al primer contacto;
+- diagnóstico anterior al primer contacto;
+- fecha de consumo posterior al inicio de síntomas;
+- municipios de Sonora no homologados;
+- residentes de otras entidades;
+- muestras rechazadas;
+- resultados pendientes;
+- folios repetidos entre fuentes;
+- concordancia de clasificación EDA moderada/grave.
+
+POPIS informa el problema y **no modifica silenciosamente la fuente original**.
+
+## Funciones
+
+- SUIVE/SUAVE: magnitud, tendencia, acumulados, comparativo histórico y canal endémico.
+- SINAVE: registros nominales, patógenos, mortalidad, letalidad y series semanales.
+- Comparador SUIVE ↔ SINAVE: diferencia, razón y correlaciones.
+- Canal endémico SUIVE y SINAVE por patógeno y territorio.
+- Territorio: municipio, Distrito de Salud y región.
+- CONAPO: incidencia y mortalidad por 100,000 habitantes cuando el denominador es compatible.
+- Indicadores NuTraVE y laboratorio.
+- Auditor normativo de EDA.
+- Excel de resultados.
+- PNG individual y ZIP de gráficas.
+- Mapa municipal INEGI cuando existe conexión a Internet.
+
+## Privacidad
+
+Las bases SINAVE contienen información nominal. POPIS 4.1 está diseñado para mantenerlas **en la computadora local**. No deben subirse a repositorios públicos ni servicios abiertos. El repositorio contiene el motor, nunca las bases nominales.
