@@ -36,7 +36,7 @@ echo Abre: http://127.0.0.1:8501
 echo Para detener POPIS, cierra esta ventana o presiona Ctrl+C.
 echo.
 start "" "http://127.0.0.1:8501"
-"%PY%" -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501 --browser.gatherUsageStats false
+"%PY%" -m streamlit run app_bootstrap.py --server.address 127.0.0.1 --server.port 8501 --browser.gatherUsageStats false
 exit /b %errorlevel%
 
 :python_error
