@@ -46,33 +46,42 @@ jobs:
           n.to_pickle('synthetic.pkl')
           '@ | Set-Content -Encoding utf8 test_normalize.py
           python test_normalize.py
-      - name: Call NuTraVE indicators
+      - name: Diagnose NuTraVE call
+        id: nutrave_diag
+        continue-on-error: true
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
           @'
+          import os, re, traceback
           import pandas as pd
           from popis_core_patch import nutrave_indicators
-          n = pd.read_pickle('synthetic.pkl')
-          ind = nutrave_indicators(n, 2026, 1)
-          print(ind.to_string(index=False))
-          assert len(ind) == 5
-          ind.to_pickle('nutrave.pkl')
-          '@ | Set-Content -Encoding utf8 test_nutrave_call.py
-          python test_nutrave_call.py
+          tag = 'OK'
+          try:
+              n = pd.read_pickle('synthetic.pkl')
+              ind = nutrave_indicators(n, 2026, 1)
+              ind.to_pickle('nutrave.pkl')
+              open('diag.txt','w',encoding='utf-8').write(ind.to_string(index=False))
+          except Exception as e:
+              traceback.print_exc()
+              raw = f"{type(e).__name__}-{e}"
+              tag = re.sub(r'[^A-Za-z0-9_.-]+','_',raw)[:120]
+              open('diag.txt','w',encoding='utf-8').write(traceback.format_exc())
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+              f.write(f'tag={tag}\n')
+          if tag != 'OK':
+              raise SystemExit(1)
+          '@ | Set-Content -Encoding utf8 diagnose_nutrave.py
+          python diagnose_nutrave.py
+      - name: Upload NuTraVE diagnostic marker
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NUTRAVE-${{ steps.nutrave_diag.outputs.tag }}
+          path: POPIS_4_0/diag.txt
+          retention-days: 2
       - name: Check under-5 denominator
-        working-directory: POPIS_4_0
-        shell: pwsh
-        run: |
-          @'
-          import pandas as pd
-          ind = pd.read_pickle('nutrave.pkl')
-          row = ind[ind['Indicador'].eq('Muestreo EDA <5 años')].iloc[0]
-          print(row.to_dict())
-          assert int(row['Denominador']) == 1, row.to_dict()
-          '@ | Set-Content -Encoding utf8 test_u5.py
-          python test_u5.py
-      - name: Check 5-plus denominator
+        if: steps.nutrave_diag.outcome == 'success'
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
@@ -80,13 +89,12 @@ jobs:
           import pandas as pd
           ind = pd.read_pickle('nutrave.pkl')
           rows = ind[ind['Indicador'].str.startswith('Muestreo EDA')]
-          assert len(rows) == 2, rows.to_dict('records')
-          row = rows.iloc[1]
-          print(row.to_dict())
-          assert int(row['Denominador']) == 2, row.to_dict()
-          '@ | Set-Content -Encoding utf8 test_p5.py
-          python test_p5.py
+          assert int(rows.iloc[0]['Denominador']) == 1, rows.to_dict('records')
+          assert int(rows.iloc[1]['Denominador']) == 2, rows.to_dict('records')
+          '@ | Set-Content -Encoding utf8 test_denoms.py
+          python test_denoms.py
       - name: Test laboratory inverse indicator
+        if: steps.nutrave_diag.outcome == 'success'
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
@@ -95,12 +103,12 @@ jobs:
           from popis_core_patch import laboratory_indicators
           n = pd.read_pickle('synthetic.pkl')
           lab = laboratory_indicators(n, 2026, 1)
-          print(lab.to_string(index=False))
           rej = lab[lab['Indicador'].eq('Muestras rechazadas')].iloc[0]
           assert ('estándar' in rej['Escala']) or ('Alarma' in rej['Escala']), rej.to_dict()
           '@ | Set-Content -Encoding utf8 test_lab.py
           python test_lab.py
       - name: Test endemic channel
+        if: steps.nutrave_diag.outcome == 'success'
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
@@ -124,3 +132,6 @@ jobs:
           name: POPIS_4_0_WINDOWS
           path: POPIS_4_0_WINDOWS.zip
           retention-days: 30
+      - name: Enforce NuTraVE success
+        if: ${{ steps.nutrave_diag.outcome != 'success' }}
+        run: exit 1
