@@ -1,4 +1,4 @@
-name: POPIS 4.0 CI
+name: POPIS 4.1 CI
 
 on:
   pull_request:
@@ -16,122 +16,118 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install core test dependencies
-        run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3"
+        run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0"
       - name: Compile Python
         working-directory: POPIS_4_0
-        run: python -m py_compile app.py app_bootstrap.py popis_core.py popis_core_patch.py
-      - name: Build synthetic normalized data
+        run: python -m py_compile app.py app_v41.py app_bootstrap.py popis_core.py popis_core_patch.py popis_data.py
+
+      - name: Test real SINAVE edge cases
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
           @'
           import pandas as pd
-          from popis_core import normalize_sinave, sinave_summary
+          import popis_core as core
+          from popis_core_patch import apply_patches, canonical_municipality
+          apply_patches()
           df = pd.DataFrame({
-              'Folio':['A','B','C','D'], 'Fec_captura':['02/01/2026','03/01/2026','10/01/2026','11/01/2026'],
-              'Fecha_Inicio':['01/01/2026','02/01/2026','09/01/2026','10/01/2026'], 'SemanaInicio':[1,1,2,2],
-              'Fec_Primer_Contacto':['01/01/2026','02/01/2026','09/01/2026','10/01/2026'],
-              'Fec_Dx_Final':['05/01/2026','15/01/2026','12/01/2026','12/01/2026'],
-              'Diag_Final':['NEGATIVO','SHIGELLA','NEGATIVO','NEGATIVO'], 'Shigella':['NEGATIVO','POSITIVO','NEGATIVO','NEGATIVO'],
-              'NuTraVE':['SI','SI','SI','SI'], 'Tipo_EDA':['MODERADA','GRAVE','MODERADA','GRAVE'], 'Edad_Años':[3,20,8,None],
-              'MuestraVibrio':['SI','SI','SI','SI'], 'MuestraEntero':['SI','SI','SI','SI'], 'MuestraVirus':['SI','NO','NO','SI'],
-              'Fec_Recep_Hiso_Vibrio':['02/01/2026','03/01/2026','10/01/2026','11/01/2026'],
-              'Fec_Recep_Hiso_Entero':['02/01/2026','03/01/2026','10/01/2026','11/01/2026'],
-              'Fec_Recep_Muest_Virus':['02/01/2026',None,None,'11/01/2026'],
-              'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','ADECUADA','RECHAZADA'], 'Calidad_Hiso_Entero':['ADECUADA','ADECUADA','ADECUADA','ADECUADA'],
+              'Folio':['BOUNDARY','A','B','REJECT'],
+              'Fec_captura':['05/01/2026','05/01/2026','10/01/2026','10/02/2026'],
+              'Fecha_Inicio':['02/01/2026','04/01/2026','09/01/2026','09/02/2026'],
+              'SemanaInicio':[53,1,2,6],
+              'Fec_Primer_Contacto':['04/01/2026','04/01/2026','09/01/2026','09/02/2026'],
+              'Fec_Dx_Final':['15/01/2026','06/01/2026','12/01/2026','12/02/2026'],
+              'Diag_Final':['SALMONELOSIS','NEGATIVO','SHIGELOSIS','SIN DX MUESTRAS RECHAZADAS'],
+              'Salmonella':['POSITIVO','NEGATIVO','NEGATIVO','NEGATIVO'],
+              'Shigella':['NEGATIVO','NEGATIVO','POSITIVO','NEGATIVO'],
+              'Edo_Res':['SONORA']*4,
+              'Mun_Res':['BENITO JUAREZ   SON','ROSARIO SON','HERMOSILLO','HERMOSILLO'],
+              'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','ADECUADA','RECHAZO DEFINITIVO'],
           })
-          n = normalize_sinave(df, 'test')
-          s = sinave_summary(n, 2026, 2)
-          assert s['acumulado'] == 4 and s['positivos_acum'] == 1, s
-          n.to_pickle('synthetic.pkl')
-          '@ | Set-Content -Encoding utf8 test_normalize.py
-          python test_normalize.py
-      - name: Diagnose NuTraVE call
-        id: nutrave_diag
-        continue-on-error: true
+          n=core.normalize_sinave(df,'actual')
+          assert int(n.loc[n.folio.eq('BOUNDARY'),'epi_year'].iloc[0]) == 2025
+          assert int(n.loc[n.folio.eq('A'),'epi_year'].iloc[0]) == 2026
+          assert canonical_municipality('BENITO JUAREZ   SON') == 'Benito Juárez'
+          assert canonical_municipality('ROSARIO SON') == 'Rosario'
+          assert core.sinave_summary(n,2026,2)['acumulado'] == 2
+          assert core.sinave_summary(n,2025,53)['acumulado'] == 1
+          issues=core.quality_issues(n)
+          assert (issues['Tipo']=='Cruce de año epidemiológico').any()
+          assert (issues['Tipo']=='Muestra rechazada').any()
+          print('REAL EDGE CASES OK')
+          '@ | Set-Content -Encoding utf8 test_real_edges.py
+          python test_real_edges.py
+
+      - name: Test duplicate current override
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
           @'
-          import os, re, traceback
-          import pandas as pd
-          from popis_core_patch import nutrave_indicators
-          tag = 'OK'
-          try:
-              n = pd.read_pickle('synthetic.pkl')
-              ind = nutrave_indicators(n, 2026, 1)
-              ind.to_pickle('nutrave.pkl')
-              open('diag.txt','w',encoding='utf-8').write(ind.to_string(index=False))
-          except Exception as e:
-              traceback.print_exc()
-              raw = f"{type(e).__name__}-{e}"
-              tag = re.sub(r'[^A-Za-z0-9_.-]+','_',raw)[:120]
-              open('diag.txt','w',encoding='utf-8').write(traceback.format_exc())
-          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write(f'tag={tag}\n')
-          if tag != 'OK':
-              raise SystemExit(1)
-          '@ | Set-Content -Encoding utf8 diagnose_nutrave.py
-          python diagnose_nutrave.py
-      - name: Upload NuTraVE diagnostic marker
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: NUTRAVE-${{ steps.nutrave_diag.outputs.tag }}
-          path: POPIS_4_0/diag.txt
-          retention-days: 2
-      - name: Check under-5 denominator
-        if: steps.nutrave_diag.outcome == 'success'
+          import io, pandas as pd
+          import popis_core as core
+          from popis_core_patch import apply_patches
+          apply_patches()
+          # Use temporary tab-delimited files with .xls-like content through BytesIO.
+          cols=['Folio','Fec_captura','Fecha_Inicio','SemanaInicio','Diag_Final','Shigella']
+          a=pd.DataFrame([['X','01/06/2026','01/06/2026',23,'','NEGATIVO']],columns=cols)
+          b=pd.DataFrame([['X','08/06/2026','01/06/2026',23,'SHIGELOSIS','POSITIVO']],columns=cols)
+          def as_file(d): return io.BytesIO(d.to_csv(sep='\t',index=False).encode('latin-1'))
+          out=core.combine_sinave([(as_file(a),'hist.xls'),(as_file(b),'actual.xls')])
+          assert len(out)==1
+          assert bool(out.iloc[0]['path_Shigella spp.'])
+          assert bool(out.iloc[0]['duplicate_folio_source'])
+          print('DUPLICATE OVERRIDE OK')
+          '@ | Set-Content -Encoding utf8 test_duplicates.py
+          python test_duplicates.py
+
+      - name: Test NuTraVE denominators and inverse rejection
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
           @'
           import pandas as pd
-          ind = pd.read_pickle('nutrave.pkl')
-          rows = ind[ind['Indicador'].str.startswith('Muestreo EDA')]
-          assert int(rows.iloc[0]['Denominador']) == 1, rows.to_dict('records')
-          assert int(rows.iloc[1]['Denominador']) == 2, rows.to_dict('records')
-          '@ | Set-Content -Encoding utf8 test_denoms.py
-          python test_denoms.py
-      - name: Test laboratory inverse indicator
-        if: steps.nutrave_diag.outcome == 'success'
-        working-directory: POPIS_4_0
-        shell: pwsh
-        run: |
-          @'
-          import pandas as pd
-          from popis_core_patch import laboratory_indicators
-          n = pd.read_pickle('synthetic.pkl')
-          lab = laboratory_indicators(n, 2026, 1)
-          rej = lab[lab['Indicador'].eq('Muestras rechazadas')].iloc[0]
-          assert ('estándar' in rej['Escala']) or ('Alarma' in rej['Escala']), rej.to_dict()
-          '@ | Set-Content -Encoding utf8 test_lab.py
-          python test_lab.py
+          import popis_core as core
+          from popis_core_patch import apply_patches
+          apply_patches()
+          df=pd.DataFrame({
+            'Folio':['A','B','C'],'Fec_captura':['02/01/2026','03/01/2026','10/01/2026'],
+            'Fecha_Inicio':['01/01/2026','02/01/2026','09/01/2026'],'SemanaInicio':[1,1,2],
+            'Fec_Primer_Contacto':['01/01/2026','02/01/2026','09/01/2026'],'Fec_Dx_Final':['05/01/2026','05/01/2026','12/01/2026'],
+            'NuTraVE':['SI','SI','SI'],'Tipo_EDA':['MODERADA','GRAVE','MODERADA'],'Edad_Años':[3,20,None],
+            'MuestraVibrio':['SI','SI','SI'],'MuestraEntero':['SI','SI','SI'],'MuestraVirus':['SI','NO','SI'],
+            'Fec_Recep_Hiso_Vibrio':['02/01/2026','03/01/2026','10/01/2026'],'Fec_Recep_Hiso_Entero':['02/01/2026','03/01/2026','10/01/2026'],
+            'Fec_Recep_Muest_Virus':['02/01/2026',None,'10/01/2026'],'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','RECHAZADA'],'Calidad_Hiso_Entero':['ADECUADA']*3,
+          })
+          n=core.normalize_sinave(df,'test')
+          ind=core.nutrave_indicators(n,2026,1); rows=ind[ind.Indicador.str.startswith('Muestreo EDA')]
+          assert int(rows.iloc[0].Denominador)==1
+          assert int(rows.iloc[1].Denominador)==1
+          lab=core.laboratory_indicators(n,2026,1); rej=lab[lab.Indicador.eq('Muestras rechazadas')].iloc[0]
+          assert 'estándar' in rej.Escala or 'Alarma' in rej.Escala
+          print('INDICATORS OK')
+          '@ | Set-Content -Encoding utf8 test_indicators.py
+          python test_indicators.py
+
       - name: Test endemic channel
-        if: steps.nutrave_diag.outcome == 'success'
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
           @'
           import pandas as pd
           from popis_core import endemic_channel
-          weekly = pd.DataFrame({'Año':[2022,2023,2024,2025,2026]*2,'SE':[1]*5+[2]*5,'Casos':[10,12,11,9,13,8,9,10,11,12]})
-          ch = endemic_channel(weekly, 2026, [2022,2023,2024,2025], 2)
-          assert len(ch) == 53
-          assert ch.loc[ch['SE'].eq(1), 'Actual'].iloc[0] == 13
+          weekly=pd.DataFrame({'Año':[2022,2023,2024,2025,2026]*2,'SE':[1]*5+[2]*5,'Casos':[10,12,11,9,13,8,9,10,11,12]})
+          ch=endemic_channel(weekly,2026,[2022,2023,2024,2025],2)
+          assert len(ch)==53 and ch.loc[ch.SE.eq(1),'Actual'].iloc[0]==13
+          print('CHANNEL OK')
           '@ | Set-Content -Encoding utf8 test_channel.py
           python test_channel.py
+
       - name: Package POPIS
-        if: always()
         shell: pwsh
-        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_0_WINDOWS.zip -Force
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_1_WINDOWS.zip -Force
       - name: Upload POPIS package
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_0_WINDOWS
-          path: POPIS_4_0_WINDOWS.zip
+          name: POPIS_4_1_WINDOWS
+          path: POPIS_4_1_WINDOWS.zip
           retention-days: 30
-      - name: Enforce NuTraVE success
-        if: ${{ steps.nutrave_diag.outcome != 'success' }}
-        run: exit 1
