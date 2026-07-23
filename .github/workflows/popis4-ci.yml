@@ -46,7 +46,7 @@ jobs:
           n.to_pickle('synthetic.pkl')
           '@ | Set-Content -Encoding utf8 test_normalize.py
           python test_normalize.py
-      - name: Test NuTraVE age denominators
+      - name: Call NuTraVE indicators
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
@@ -56,12 +56,36 @@ jobs:
           n = pd.read_pickle('synthetic.pkl')
           ind = nutrave_indicators(n, 2026, 1)
           print(ind.to_string(index=False))
-          u5 = ind[ind['Indicador'].eq('Muestreo EDA <5 años')].iloc[0]
-          p5 = ind[ind['Indicador'].str.contains('5 años', regex=False) & ~ind['Indicador'].str.contains('<5', regex=False)].iloc[0]
-          assert int(u5['Denominador']) == 1, u5.to_dict()
-          assert int(p5['Denominador']) == 2, p5.to_dict()
-          '@ | Set-Content -Encoding utf8 test_nutrave.py
-          python test_nutrave.py
+          assert len(ind) == 5
+          ind.to_pickle('nutrave.pkl')
+          '@ | Set-Content -Encoding utf8 test_nutrave_call.py
+          python test_nutrave_call.py
+      - name: Check under-5 denominator
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import pandas as pd
+          ind = pd.read_pickle('nutrave.pkl')
+          row = ind[ind['Indicador'].eq('Muestreo EDA <5 años')].iloc[0]
+          print(row.to_dict())
+          assert int(row['Denominador']) == 1, row.to_dict()
+          '@ | Set-Content -Encoding utf8 test_u5.py
+          python test_u5.py
+      - name: Check 5-plus denominator
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import pandas as pd
+          ind = pd.read_pickle('nutrave.pkl')
+          rows = ind[ind['Indicador'].str.startswith('Muestreo EDA')]
+          assert len(rows) == 2, rows.to_dict('records')
+          row = rows.iloc[1]
+          print(row.to_dict())
+          assert int(row['Denominador']) == 2, row.to_dict()
+          '@ | Set-Content -Encoding utf8 test_p5.py
+          python test_p5.py
       - name: Test laboratory inverse indicator
         working-directory: POPIS_4_0
         shell: pwsh
