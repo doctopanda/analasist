@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# POPIS: NUNCA versionar bases nominales ni denominadores locales
+POPIS_4_0/data/
+POPIS_4_0/IMPORTAR/
+*.xls
