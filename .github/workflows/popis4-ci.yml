@@ -1,0 +1,69 @@
+name: POPIS 4.0 CI
+
+on:
+  pull_request:
+    paths:
+      - 'POPIS_4_0/**'
+      - '.github/workflows/popis4-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-and-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        working-directory: POPIS_4_0
+        run: python -m pip install -r requirements.txt
+      - name: Compile Python
+        working-directory: POPIS_4_0
+        run: |
+          python -m py_compile app.py popis_core.py
+      - name: Synthetic engine smoke test
+        working-directory: POPIS_4_0
+        shell: python
+        run: |
+          import pandas as pd
+          from popis_core import normalize_sinave, sinave_summary, endemic_channel, nutrave_indicators
+          df = pd.DataFrame({
+              'Folio':['A','B','C'],
+              'Fec_captura':['02/01/2026','03/01/2026','10/01/2026'],
+              'Fecha_Inicio':['01/01/2026','02/01/2026','09/01/2026'],
+              'SemanaInicio':[1,1,2],
+              'Fec_Primer_Contacto':['01/01/2026','02/01/2026','09/01/2026'],
+              'Fec_Dx_Final':['05/01/2026','15/01/2026','12/01/2026'],
+              'Diag_Final':['NEGATIVO','SHIGELLA','NEGATIVO'],
+              'Shigella':['NEGATIVO','POSITIVO','NEGATIVO'],
+              'NuTraVE':['SI','SI','SI'],
+              'Tipo_EDA':['MODERADA','GRAVE','MODERADA'],
+              'Edad_Años':[3,20,8],
+              'MuestraVibrio':['SI','SI','SI'],
+              'MuestraEntero':['SI','SI','SI'],
+              'MuestraVirus':['SI','NO','NO'],
+              'Fec_Recep_Hiso_Vibrio':['02/01/2026','03/01/2026','10/01/2026'],
+              'Fec_Recep_Hiso_Entero':['02/01/2026','03/01/2026','10/01/2026'],
+              'Fec_Recep_Muest_Virus':['02/01/2026',None,None],
+              'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','ADECUADA'],
+              'Calidad_Hiso_Entero':['ADECUADA','ADECUADA','ADECUADA'],
+          })
+          n = normalize_sinave(df, 'test')
+          s = sinave_summary(n, 2026, 2)
+          assert s['acumulado'] == 3, s
+          assert s['positivos_acum'] == 1, s
+          ind = nutrave_indicators(n, 2026, 1)
+          assert len(ind) == 5
+          weekly = pd.DataFrame({'Año':[2022,2023,2024,2025,2026]*2,'SE':[1]*5+[2]*5,'Casos':[10,12,11,9,13,8,9,10,11,12]})
+          ch = endemic_channel(weekly, 2026, [2022,2023,2024,2025], 2)
+          assert len(ch) == 53
+          print('POPIS core smoke test OK')
+      - name: Package POPIS
+        shell: pwsh
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_0_WINDOWS.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: POPIS_4_0_WINDOWS
+          path: POPIS_4_0_WINDOWS.zip
+          retention-days: 30
