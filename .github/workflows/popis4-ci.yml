@@ -67,20 +67,17 @@ jobs:
           import popis_core as core
           from popis_core_patch import apply_patches
           apply_patches()
-          # Use temporary tab-delimited files with .xls-like content through BytesIO.
           cols=['Folio','Fec_captura','Fecha_Inicio','SemanaInicio','Diag_Final','Shigella']
           a=pd.DataFrame([['X','01/06/2026','01/06/2026',23,'','NEGATIVO']],columns=cols)
           b=pd.DataFrame([['X','08/06/2026','01/06/2026',23,'SHIGELOSIS','POSITIVO']],columns=cols)
           def as_file(d): return io.BytesIO(d.to_csv(sep='\t',index=False).encode('latin-1'))
           out=core.combine_sinave([(as_file(a),'hist.xls'),(as_file(b),'actual.xls')])
-          assert len(out)==1
-          assert bool(out.iloc[0]['path_Shigella spp.'])
-          assert bool(out.iloc[0]['duplicate_folio_source'])
+          assert len(out)==1 and bool(out.iloc[0]['path_Shigella spp.']) and bool(out.iloc[0]['duplicate_folio_source'])
           print('DUPLICATE OVERRIDE OK')
           '@ | Set-Content -Encoding utf8 test_duplicates.py
           python test_duplicates.py
 
-      - name: Test NuTraVE denominators and inverse rejection
+      - name: Test NuTraVE and laboratory indicators
         working-directory: POPIS_4_0
         shell: pwsh
         run: |
@@ -93,17 +90,21 @@ jobs:
             'Folio':['A','B','C'],'Fec_captura':['02/01/2026','03/01/2026','10/01/2026'],
             'Fecha_Inicio':['01/01/2026','02/01/2026','09/01/2026'],'SemanaInicio':[1,1,2],
             'Fec_Primer_Contacto':['01/01/2026','02/01/2026','09/01/2026'],'Fec_Dx_Final':['05/01/2026','05/01/2026','12/01/2026'],
+            'Diag_Final':['NEGATIVO','NEGATIVO','NEGATIVO'],
             'NuTraVE':['SI','SI','SI'],'Tipo_EDA':['MODERADA','GRAVE','MODERADA'],'Edad_Años':[3,20,None],
             'MuestraVibrio':['SI','SI','SI'],'MuestraEntero':['SI','SI','SI'],'MuestraVirus':['SI','NO','SI'],
+            'FecTomaMuestraVibrio':['01/01/2026','02/01/2026','09/01/2026'],'FecTomaMuestraEntero':['01/01/2026','02/01/2026','09/01/2026'],
+            'FecTomaMuestraVirus':['01/01/2026',None,'09/01/2026'],
             'Fec_Recep_Hiso_Vibrio':['02/01/2026','03/01/2026','10/01/2026'],'Fec_Recep_Hiso_Entero':['02/01/2026','03/01/2026','10/01/2026'],
-            'Fec_Recep_Muest_Virus':['02/01/2026',None,'10/01/2026'],'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','RECHAZADA'],'Calidad_Hiso_Entero':['ADECUADA']*3,
+            'Fec_Recep_Muest_Virus':['02/01/2026',None,'10/01/2026'],
+            'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','RECHAZADA'],'Calidad_Hiso_Entero':['ADECUADA']*3,'Calidad_Muest_Virus':['ADECUADA','', 'ADECUADA'],
           })
           n=core.normalize_sinave(df,'test')
           ind=core.nutrave_indicators(n,2026,1); rows=ind[ind.Indicador.str.startswith('Muestreo EDA')]
-          assert int(rows.iloc[0].Denominador)==1
-          assert int(rows.iloc[1].Denominador)==1
+          assert int(rows.iloc[0]['Denominador'])==1, rows.to_dict('records')
+          assert int(rows.iloc[1]['Denominador'])==1, rows.to_dict('records')
           lab=core.laboratory_indicators(n,2026,1); rej=lab[lab.Indicador.eq('Muestras rechazadas')].iloc[0]
-          assert 'estándar' in rej.Escala or 'Alarma' in rej.Escala
+          assert ('estándar' in rej['Escala']) or ('Alarma' in rej['Escala']), rej.to_dict()
           print('INDICATORS OK')
           '@ | Set-Content -Encoding utf8 test_indicators.py
           python test_indicators.py
