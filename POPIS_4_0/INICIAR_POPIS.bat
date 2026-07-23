@@ -2,63 +2,116 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-title POPIS 4.1 - DATOS PRECARGADOS
+title POPIS 4.1.1 - ARRANQUE SEGURO
 set "VENV=%LOCALAPPDATA%\POPIS4\venv"
 set "PY=%VENV%\Scripts\python.exe"
-set "PORT="
+set "STATE=%LOCALAPPDATA%\POPIS4"
+set "LOGOUT=%STATE%\POPIS_streamlit_out.log"
+set "LOGERR=%STATE%\POPIS_streamlit_error.log"
+set "PIDFILE=%STATE%\POPIS.pid"
+set "PORTFILE=%STATE%\POPIS.port"
+
+if not exist "%STATE%" mkdir "%STATE%"
+if exist "%LOGOUT%" del /q "%LOGOUT%" >nul 2>&1
+if exist "%LOGERR%" del /q "%LOGERR%" >nul 2>&1
+if exist "%PIDFILE%" del /q "%PIDFILE%" >nul 2>&1
 
 echo ===============================================================
-echo  POPIS 4.1 - SUIVE + SINAVE + DATOS LOCALES PRECARGADOS
+echo  POPIS 4.1.1 - ARRANQUE SEGURO
+echo  SUIVE + SINAVE + INDICADORES + TERRITORIO
 echo ===============================================================
 echo.
 
 if not exist "%PY%" (
-  echo [1/5] Creando entorno virtual aislado en:
-  echo       %VENV%
-  if not exist "%LOCALAPPDATA%\POPIS4" mkdir "%LOCALAPPDATA%\POPIS4"
+  echo [1/6] Creando entorno virtual aislado...
   py -3.12 -m venv "%VENV%" 2>nul
   if errorlevel 1 python -m venv "%VENV%"
   if errorlevel 1 goto :python_error
 ) else (
-  echo [1/5] Entorno POPIS localizado.
+  echo [1/6] Entorno POPIS localizado.
 )
 
-echo [2/5] Verificando dependencias...
-"%PY%" -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
+echo [2/6] Verificando dependencias...
+"%PY%" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 goto :install_error
 
-echo [3/5] Verificando motor POPIS 4.1...
-"%PY%" -c "import streamlit,pandas,openpyxl; import popis_core,popis_core_patch,popis_data; print('Motor POPIS 4.1 OK')"
+echo [3/6] Verificando motor POPIS...
+"%PY%" -c "import streamlit,pandas,openpyxl; import popis_core,popis_core_patch,popis_data,popis_runtime; print('Motor POPIS OK')"
 if errorlevel 1 goto :install_error
 
-echo [4/5] Buscando puerto libre...
-for /f %%P in ('powershell -NoProfile -Command "$u=(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue).LocalPort; (8504..8514 ^| Where-Object {$_ -notin $u} ^| Select-Object -First 1)"') do set "PORT=%%P"
-if not defined PORT set "PORT=8504"
+if not exist "app_bootstrap.py" goto :app_error
+
+echo [4/6] Seleccionando puerto libre...
+for /f %%P in ('"%PY%" -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()"') do set "PORT=%%P"
+if not defined PORT goto :port_error
+echo !PORT!>"%PORTFILE%"
 echo       Puerto: !PORT!
 
-echo [5/5] Iniciando POPIS 4.1...
+echo [5/6] Iniciando servidor Streamlit...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$args=@('-m','streamlit','run','app_bootstrap.py','--server.address','127.0.0.1','--server.port','!PORT!','--browser.gatherUsageStats','false'); $p=Start-Process -FilePath '%PY%' -ArgumentList $args -WorkingDirectory '%CD%' -RedirectStandardOutput '%LOGOUT%' -RedirectStandardError '%LOGERR%' -PassThru; Set-Content -Path '%PIDFILE%' -Value $p.Id"
+if errorlevel 1 goto :server_error
+
+echo [6/6] Esperando a que POPIS responda...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$url='http://127.0.0.1:!PORT!/_stcore/health'; $ok=$false; for($i=0;$i -lt 90;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2; if($r.StatusCode -eq 200){$ok=$true;break} } catch {}; Start-Sleep -Seconds 1 }; if(-not $ok){exit 1}"
+if errorlevel 1 goto :health_error
+
 echo.
 echo ===============================================================
+echo  POPIS ESTA ACTIVO
 echo  http://127.0.0.1:!PORT!
-echo  Debes ver: POPIS 4.1.0-data
 echo ===============================================================
 echo.
+powershell.exe -NoProfile -Command "Start-Process 'http://127.0.0.1:!PORT!'"
 
-REM Abrir navegador sin usar comillas escapadas con barra invertida.
-start "" powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process 'http://127.0.0.1:!PORT!'"
+echo El navegador ya debe mostrar POPIS.
+echo No cierres esta ventana mientras lo uses.
+echo.
+for /f %%I in (%PIDFILE%) do set "POPISPID=%%I"
+powershell.exe -NoProfile -Command "if (Get-Process -Id !POPISPID! -ErrorAction SilentlyContinue) { Wait-Process -Id !POPISPID! }"
+exit /b 0
 
-REM Mantener Streamlit en primer plano mientras POPIS este abierto.
-"%PY%" -m streamlit run app_bootstrap.py --server.address 127.0.0.1 --server.port !PORT! --browser.gatherUsageStats false
-exit /b %errorlevel%
+:health_error
+echo.
+echo ===============================================================
+echo ERROR: Streamlit no respondio despues de 90 segundos.
+echo ===============================================================
+echo.
+echo --- ERROR DE STREAMLIT ---
+if exist "%LOGERR%" type "%LOGERR%"
+echo.
+echo --- SALIDA DE STREAMLIT ---
+if exist "%LOGOUT%" type "%LOGOUT%"
+echo.
+echo Los logs tambien quedaron en:
+echo   %LOGERR%
+echo   %LOGOUT%
+pause
+exit /b 1
+
+:server_error
+echo ERROR: no pude iniciar el proceso de Streamlit.
+if exist "%LOGERR%" type "%LOGERR%"
+pause
+exit /b 1
 
 :python_error
-echo.
 echo ERROR: no pude crear el entorno Python.
 pause
 exit /b 1
 
 :install_error
-echo.
-echo ERROR: fallo la instalacion o verificacion. Ejecuta REPARAR_POPIS.bat.
+echo ERROR: fallo la instalacion o verificacion de dependencias.
+pause
+exit /b 1
+
+:app_error
+echo ERROR: no encuentro app_bootstrap.py en %CD%
+pause
+exit /b 1
+
+:port_error
+echo ERROR: no pude obtener un puerto libre.
 pause
 exit /b 1
