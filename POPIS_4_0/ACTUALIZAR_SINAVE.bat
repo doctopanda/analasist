@@ -8,8 +8,9 @@ if not defined SRC (
  pause
  exit /b 1
 )
+for %%G in ("%SRC%") do set "EXT=%%~xG"
 del /Q "data\sinave\actual\*" 2>nul
-copy /Y "%SRC%" "data\sinave\actual\Diarreas_actual%~xSRC" >nul
+copy /Y "%SRC%" "data\sinave\actual\Diarreas_actual%EXT%" >nul
 echo SINAVE actual actualizado correctamente.
 echo Archivo: %SRC%
 pause
