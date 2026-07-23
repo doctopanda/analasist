@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-title POPIS 4.1.1 - ARRANQUE SEGURO
+title POPIS 4.1.2 - ARRANQUE SEGURO
 set "VENV=%LOCALAPPDATA%\POPIS4\venv"
 set "PY=%VENV%\Scripts\python.exe"
 set "STATE=%LOCALAPPDATA%\POPIS4"
@@ -15,9 +15,10 @@ if not exist "%STATE%" mkdir "%STATE%"
 if exist "%LOGOUT%" del /q "%LOGOUT%" >nul 2>&1
 if exist "%LOGERR%" del /q "%LOGERR%" >nul 2>&1
 if exist "%PIDFILE%" del /q "%PIDFILE%" >nul 2>&1
+if exist "%PORTFILE%" del /q "%PORTFILE%" >nul 2>&1
 
 echo ===============================================================
-echo  POPIS 4.1.1 - ARRANQUE SEGURO
+echo  POPIS 4.1.2 - ARRANQUE SEGURO
 echo  SUIVE + SINAVE + INDICADORES + TERRITORIO
 echo ===============================================================
 echo.
@@ -42,19 +43,19 @@ if errorlevel 1 goto :install_error
 if not exist "app_bootstrap.py" goto :app_error
 
 echo [4/6] Seleccionando puerto libre...
-for /f %%P in ('"%PY%" -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()"') do set "PORT=%%P"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$l=New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback,0); $l.Start(); $p=$l.LocalEndpoint.Port; $l.Stop(); Set-Content -LiteralPath '%PORTFILE%' -Value $p"
+if errorlevel 1 goto :port_error
+if not exist "%PORTFILE%" goto :port_error
+set /p PORT=<"%PORTFILE%"
 if not defined PORT goto :port_error
-echo !PORT!>"%PORTFILE%"
 echo       Puerto: !PORT!
 
 echo [5/6] Iniciando servidor Streamlit...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$args=@('-m','streamlit','run','app_bootstrap.py','--server.address','127.0.0.1','--server.port','!PORT!','--browser.gatherUsageStats','false'); $p=Start-Process -FilePath '%PY%' -ArgumentList $args -WorkingDirectory '%CD%' -RedirectStandardOutput '%LOGOUT%' -RedirectStandardError '%LOGERR%' -PassThru; Set-Content -Path '%PIDFILE%' -Value $p.Id"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$args=@('-m','streamlit','run','app_bootstrap.py','--server.address','127.0.0.1','--server.port','!PORT!','--browser.gatherUsageStats','false'); $p=Start-Process -FilePath '%PY%' -ArgumentList $args -WorkingDirectory '%CD%' -RedirectStandardOutput '%LOGOUT%' -RedirectStandardError '%LOGERR%' -PassThru; Set-Content -LiteralPath '%PIDFILE%' -Value $p.Id"
 if errorlevel 1 goto :server_error
 
 echo [6/6] Esperando a que POPIS responda...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$url='http://127.0.0.1:!PORT!/_stcore/health'; $ok=$false; for($i=0;$i -lt 90;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2; if($r.StatusCode -eq 200){$ok=$true;break} } catch {}; Start-Sleep -Seconds 1 }; if(-not $ok){exit 1}"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$url='http://127.0.0.1:!PORT!/_stcore/health'; $ok=$false; for($i=0;$i -lt 90;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2; if($r.StatusCode -eq 200){$ok=$true;break} } catch {}; Start-Sleep -Seconds 1 }; if(-not $ok){exit 1}"
 if errorlevel 1 goto :health_error
 
 echo.
@@ -68,7 +69,7 @@ powershell.exe -NoProfile -Command "Start-Process 'http://127.0.0.1:!PORT!'"
 echo El navegador ya debe mostrar POPIS.
 echo No cierres esta ventana mientras lo uses.
 echo.
-for /f %%I in (%PIDFILE%) do set "POPISPID=%%I"
+set /p POPISPID=<"%PIDFILE%"
 powershell.exe -NoProfile -Command "if (Get-Process -Id !POPISPID! -ErrorAction SilentlyContinue) { Wait-Process -Id !POPISPID! }"
 exit /b 0
 
@@ -113,5 +114,6 @@ exit /b 1
 
 :port_error
 echo ERROR: no pude obtener un puerto libre.
+echo Archivo esperado: %PORTFILE%
 pause
 exit /b 1
