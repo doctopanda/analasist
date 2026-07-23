@@ -41,18 +41,24 @@ echo.
 echo ===============================================================
 echo  http://127.0.0.1:!PORT!
 echo  Debes ver: POPIS 4.1.0-data
- echo ===============================================================
+echo ===============================================================
 echo.
-start "" cmd /c "timeout /t 3 /nobreak ^>nul & start \"\" http://127.0.0.1:!PORT!"
+
+REM Abrir navegador sin usar comillas escapadas con barra invertida.
+start "" powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process 'http://127.0.0.1:!PORT!'"
+
+REM Mantener Streamlit en primer plano mientras POPIS este abierto.
 "%PY%" -m streamlit run app_bootstrap.py --server.address 127.0.0.1 --server.port !PORT! --browser.gatherUsageStats false
 exit /b %errorlevel%
 
 :python_error
+echo.
 echo ERROR: no pude crear el entorno Python.
 pause
 exit /b 1
 
 :install_error
+echo.
 echo ERROR: fallo la instalacion o verificacion. Ejecuta REPARAR_POPIS.bat.
 pause
 exit /b 1
