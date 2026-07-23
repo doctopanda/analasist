@@ -1,9 +1,9 @@
-"""Arranque POPIS 4.1 con parches de vigilancia antes de cargar la interfaz."""
+"""Arranque POPIS 4.1 con parches seguros antes de cargar la interfaz."""
 from pathlib import Path
 
-from popis_core_patch import apply_patches
+from popis_runtime import activate
 
-apply_patches()
+activate()
 
 app_path = Path(__file__).with_name("app_v41.py")
 code = compile(app_path.read_text(encoding="utf-8"), str(app_path), "exec")
