@@ -19,7 +19,7 @@ jobs:
         run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0"
       - name: Compile Python
         working-directory: POPIS_4_0
-        run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_case_population_fix.py popis_spatial.py
+        run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_case_population_fix.py popis_spatial.py
 
       - name: Test real SINAVE edge cases
         working-directory: POPIS_4_0
@@ -100,12 +100,7 @@ jobs:
           from popis_runtime import activate
           activate()
           import popis_population as pp
-          popraw=pd.DataFrame({
-            'MUN':['Hermosillo']*8,'AÑO':[2026]*8,
-            'SEXO':['HOMBRES','MUJERES']*4,
-            'EDAD_QUIN':['00-04','00-04','05-09','05-09','pobm_65_mm','pobm_65_mm','60-64','60-64'],
-            'POB':[1000,950,1100,1050,600,650,500,550]
-          })
+          popraw=pd.DataFrame({'MUN':['Hermosillo']*8,'AÑO':[2026]*8,'SEXO':['HOMBRES','MUJERES']*4,'EDAD_QUIN':['00-04','00-04','05-09','05-09','pobm_65_mm','pobm_65_mm','60-64','60-64'],'POB':[1000,950,1100,1050,600,650,500,550]})
           pop=pp._normalize_frame(popraw,'synthetic')
           assert '65+' in set(pop['Grupo edad'])
           prof=pp.demographic_profile(pop,2026,'Hermosillo'); assert int(prof['Población'])==6400
@@ -120,12 +115,30 @@ jobs:
           '@ | Set-Content -Encoding utf8 test_population.py
           python test_population.py
 
+      - name: Test territorial rate scaling and ratio
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          cases=50; pop_mun=100000; state_cases=500; state_pop=3000000
+          expected_ratio=(cases/pop_mun)/(state_cases/state_pop)
+          assert round(expected_ratio,6)==3.0
+          for base in (1000,10000,100000):
+              municipal=cases/pop_mun*base
+              state=state_cases/state_pop*base
+              contribution=cases/state_pop*base
+              assert abs((municipal/state)-3.0)<1e-12
+              assert contribution>=0
+          print('TERRITORIAL RATE SCALING OK')
+          '@ | Set-Content -Encoding utf8 test_territory_rates.py
+          python test_territory_rates.py
+
       - name: Package POPIS
         shell: pwsh
-        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_3_2_WINDOWS.zip -Force
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_3_5_WINDOWS.zip -Force
       - name: Upload POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_3_2_WINDOWS
-          path: POPIS_4_3_2_WINDOWS.zip
+          name: POPIS_4_3_5_WINDOWS
+          path: POPIS_4_3_5_WINDOWS.zip
           retention-days: 30
