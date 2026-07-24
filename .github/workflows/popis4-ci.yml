@@ -1,4 +1,4 @@
-name: POPIS 4.1 CI
+name: POPIS 4.2 CI
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ jobs:
         run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0"
       - name: Compile Python
         working-directory: POPIS_4_0
-        run: python -m py_compile app.py app_v41.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py
+        run: python -m py_compile app.py app_v41.py app_v42.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py
 
       - name: Test real SINAVE edge cases
         working-directory: POPIS_4_0
@@ -89,12 +89,38 @@ jobs:
           '@ | Set-Content -Encoding utf8 test_channel.py
           python test_channel.py
 
+      - name: Test population age-sex engine
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import io,pandas as pd
+          from popis_population import _normalize_frame, demographic_profile, pyramid, age_sex_rates
+          import popis_core as core
+          from popis_runtime import activate
+          activate()
+          popraw=pd.DataFrame({
+            'MUN':['Hermosillo']*8,'AÑO':[2026]*8,
+            'SEXO':['HOMBRES','MUJERES']*4,
+            'EDAD_QUIN':['00-04','00-04','05-09','05-09','65-69','65-69','85 Y MAS','85 Y MAS'],
+            'POB':[1000,950,1100,1050,500,550,100,150]
+          })
+          pop=_normalize_frame(popraw,'synthetic')
+          prof=demographic_profile(pop,2026,'Hermosillo'); assert int(prof['Población'])==5400 and int(prof['Hombres'])==2700 and int(prof['Mujeres'])==2700
+          pyr=pyramid(pop,2026,'Hermosillo'); assert set(['Hombres','Mujeres']).issubset(pyr.columns)
+          sinraw=pd.DataFrame({'Folio':['A','B'],'Fec_captura':['05/01/2026','05/01/2026'],'Fecha_Inicio':['04/01/2026','04/01/2026'],'SemanaInicio':[1,1],'Mun_Res':['Hermosillo','Hermosillo'],'Edo_Res':['SONORA','SONORA'],'Sexo':['HOMBRE','MUJER'],'Edad_Años':[3,67],'Diag_Final':['NEGATIVO','NEGATIVO']})
+          sin=core.normalize_sinave(sinraw,'test')
+          rates=age_sex_rates(sin,pop,2026,1,'Hermosillo'); assert rates['Casos'].sum()==2 and rates['Población'].sum()==5400
+          print('POPULATION ENGINE OK')
+          '@ | Set-Content -Encoding utf8 test_population.py
+          python test_population.py
+
       - name: Package POPIS
         shell: pwsh
-        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_1_WINDOWS.zip -Force
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_2_WINDOWS.zip -Force
       - name: Upload POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_1_WINDOWS
-          path: POPIS_4_1_WINDOWS.zip
+          name: POPIS_4_2_WINDOWS
+          path: POPIS_4_2_WINDOWS.zip
           retention-days: 30
