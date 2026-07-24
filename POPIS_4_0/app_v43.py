@@ -1,17 +1,17 @@
-"""POPIS 4.3.1: interfaz 4.2 + focos espaciales + arranque robusto sin años cargados."""
+"""POPIS 4.3.2: interfaz 4.2 + focos espaciales + cruces territoriales corregidos."""
 from pathlib import Path
 
 app = Path(__file__).with_name("app_v42.py")
 text = app.read_text(encoding="utf-8")
-text = text.replace('BUILD = "4.2.0-pop"', 'BUILD = "4.3.1-spatial"')
+text = text.replace('BUILD = "4.2.0-pop"', 'BUILD = "4.3.2-spatial"')
 text = text.replace(
     'SUIVE + SINAVE + demografía + indicadores + territorio · Sonora',
     'SUIVE + SINAVE + demografía + territorio + focos espaciales · Sonora',
 )
 
 # Corrección defensiva del selector de año.
-# En 4.2/4.3, cuando no había ninguna fuente reconocida, las opciones visibles
-# eran [2026] pero el índice se calculaba desde available_years=[] y quedaba -1.
+# Cuando no hay ninguna fuente reconocida, las opciones visibles son [2026]
+# y el índice debe permanecer en 0, nunca en -1.
 old_selector = '''c1,c2,c3=st.columns([1.3,1,1])
 with c1: year=st.selectbox("Año epidemiológico",available_years or [2026],index=(available_years.index(current_year) if current_year in available_years else len(available_years)-1))
 with c2: week=st.number_input("Semana de corte",1,53,max_week_for(int(year)),1)
