@@ -13,7 +13,14 @@ _ORIGINAL_LABORATORY = core.laboratory_indicators
 
 def activate() -> None:
     from popis_core_patch import apply_patches
+    from popis_suive_fix import parse_suive_history as robust_parse_suive_history
+
     apply_patches()
+
+    # El libro de canal endémico repite años en las secciones de casos e
+    # incidencia. La versión robusta obliga a seleccionar conteos de casos y
+    # recorta ceros de semanas futuras del año actual.
+    core.parse_suive_history = robust_parse_suive_history
 
     def laboratory_indicators(df, year: int, month: int):
         result = _ORIGINAL_LABORATORY(df, year, month).copy()
