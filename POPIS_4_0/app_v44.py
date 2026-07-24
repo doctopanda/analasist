@@ -1,12 +1,12 @@
-"""POPIS 4.3.5: mapa completo de Sonora + tasas territoriales con base seleccionable."""
+"""POPIS 4.3.6: mapa completo de Sonora + tasas territoriales con base seleccionable."""
 from pathlib import Path
 
 wrapper = Path(__file__).with_name("app_v43.py")
 source = wrapper.read_text(encoding="utf-8")
-source = source.replace("4.3.4-charts", "4.3.5-territory")
+source = source.replace("4.3.4-charts", "4.3.6-territory")
 source = source.replace(
     '"""POPIS 4.3.4: interfaz 4.2 + focos espaciales + tasas explícitas + gráficas ordenables + canal dual."""',
-    '"""POPIS 4.3.5: interfaz 4.2 + mapa completo + tasas configurables + gráficas ordenables + canal dual."""',
+    '"""POPIS 4.3.6: interfaz 4.2 + mapa completo + tasas configurables + gráficas ordenables + canal dual."""',
 )
 
 old = '''new_territory = \'\'\'with TABS[5]:
