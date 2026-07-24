@@ -58,7 +58,7 @@ def _patch_v42(text: str) -> str:
     si_rep=sinave_summary(sinave,year,week) if not sinave.empty else {"acumulado":np.nan,"positivos_acum":np.nan,"defunciones_acum":np.nan}
     state_prof=demographic_profile(population,year,"Todos") if not population.empty else {}
     state_pop=float(state_prof.get("Población",np.nan)) if state_prof else np.nan
-    report_base=100000
+    report_base=rate_base if "rate_base" in globals() else 100000
     state_inc=(float(si_rep.get("acumulado",np.nan))/state_pop*report_base) if pd.notna(state_pop) and state_pop>0 and pd.notna(si_rep.get("acumulado",np.nan)) else np.nan
     source_text="; ".join((bundle.inventory["Sistema"].astype(str)+": "+bundle.inventory["Archivo"].astype(str)).tolist()) if not bundle.inventory.empty else "Fuentes locales POPIS"
     report_context={"Año":year,"Semana":week,"SUIVE acumulado":su_rep.get("acumulado"),"SUIVE semana":su_rep.get("semana"),"SINAVE acumulado":si_rep.get("acumulado"),"SINAVE positivos":si_rep.get("positivos_acum"),"Defunciones registradas":si_rep.get("defunciones_acum"),"Población estatal":state_pop,"Incidencia estatal SINAVE":state_inc,"Base tasa":report_base,"Fuentes":source_text}
