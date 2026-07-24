@@ -1,11 +1,8 @@
-"""Activación segura de los parches POPIS.
-
-Guarda referencias al motor base ANTES de reemplazar funciones. Esto evita
-recursión cuando un wrapper necesita reutilizar la implementación original.
-"""
+"""Activación segura de los parches POPIS."""
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import popis_core as core
 
 _ORIGINAL_LABORATORY = core.laboratory_indicators
@@ -17,17 +14,27 @@ def activate() -> None:
     from popis_case_population_fix import activate_case_population_fixes
 
     apply_patches()
-
-    # Corregir el cruce con las bases reales antes de cargar fuentes locales:
-    # - Edo_Res -> residencia Sonora
-    # - pobm/pobh_65_mm -> 65+
-    # - casos >=65 -> denominador 65+ cuando corresponda.
     activate_case_population_fixes()
-
-    # El libro de canal endémico repite años en las secciones de casos e
-    # incidencia. La versión robusta obliga a seleccionar conteos de casos y
-    # recorta ceros de semanas futuras del año actual.
     core.parse_suive_history = robust_parse_suive_history
+
+    def safe_suive_summary(suive: pd.DataFrame, year: int, week_cutoff: int) -> dict:
+        if suive is None or suive.empty:
+            return {"acumulado": np.nan, "semana": np.nan, "ultima_se": np.nan}
+        y = suive[pd.to_numeric(suive["Año"], errors="coerce").eq(year)].copy()
+        if y.empty:
+            return {"acumulado": np.nan, "semana": np.nan, "ultima_se": np.nan}
+        y["SE"] = pd.to_numeric(y["SE"], errors="coerce")
+        y["Casos"] = pd.to_numeric(y["Casos"], errors="coerce")
+        available = y[y["SE"].between(1, 53) & y["Casos"].notna()]
+        last = int(available["SE"].max()) if not available.empty else np.nan
+        x = available[available["SE"].between(1, week_cutoff)]
+        w = available[available["SE"].eq(week_cutoff)]
+        # Una semana que no existe en la fuente es SIN DATO, no cero casos.
+        week_value = float(w["Casos"].sum()) if not w.empty else np.nan
+        accumulated = float(x["Casos"].sum()) if not x.empty else np.nan
+        return {"acumulado": accumulated, "semana": week_value, "ultima_se": last}
+
+    core.suive_summary = safe_suive_summary
 
     def laboratory_indicators(df, year: int, month: int):
         result = _ORIGINAL_LABORATORY(df, year, month).copy()
