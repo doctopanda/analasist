@@ -10,12 +10,15 @@ _ORIGINAL_LABORATORY = core.laboratory_indicators
 
 def activate() -> None:
     from popis_core_patch import apply_patches
-    from popis_suive_fix import parse_suive_history as robust_parse_suive_history
+    from popis_suive_cube import parse_suive_auto
     from popis_case_population_fix import activate_case_population_fixes
 
     apply_patches()
     activate_case_population_fixes()
-    core.parse_suive_history = robust_parse_suive_history
+
+    # POPIS 4.5 acepta tanto el libro histórico/canal como fuentes provenientes
+    # del cubo SUIVE (tabla larga o pivote semanas×años).
+    core.parse_suive_history = parse_suive_auto
 
     def safe_suive_summary(suive: pd.DataFrame, year: int, week_cutoff: int) -> dict:
         if suive is None or suive.empty:
@@ -29,7 +32,6 @@ def activate() -> None:
         last = int(available["SE"].max()) if not available.empty else np.nan
         x = available[available["SE"].between(1, week_cutoff)]
         w = available[available["SE"].eq(week_cutoff)]
-        # Una semana que no existe en la fuente es SIN DATO, no cero casos.
         week_value = float(w["Casos"].sum()) if not w.empty else np.nan
         accumulated = float(x["Casos"].sum()) if not x.empty else np.nan
         return {"acumulado": accumulated, "semana": week_value, "ultima_se": last}
