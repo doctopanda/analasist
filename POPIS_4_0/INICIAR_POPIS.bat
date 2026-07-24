@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-title POPIS 4.3.6 - TERRITORIO Y TASAS
+title POPIS 4.4.0 - SUIVE SEGURO Y REPORTES
 set "VENV=%LOCALAPPDATA%\POPIS4\venv"
 set "PY=%VENV%\Scripts\python.exe"
 set "STATE=%LOCALAPPDATA%\POPIS4"
@@ -14,8 +14,8 @@ set "PORTFILE=%STATE%\POPIS.port"
 if not exist "%STATE%" mkdir "%STATE%"
 
 echo ===============================================================
-echo  POPIS 4.3.6 - TERRITORIO Y TASAS ESCALABLES
-echo  Mapa completo + 1 000 / 10 000 / 100 000 habitantes
+echo  POPIS 4.4.0 - SUIVE SEGURO + REPORTES EXCEL / WORD
+echo  Mapa completo + tasas + vigilancia integrada
 echo ===============================================================
 echo.
 
@@ -44,16 +44,16 @@ echo [2/7] Verificando dependencias...
 "%PY%" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 goto :install_error
 
-echo [3/7] Verificando motor POPIS...
-"%PY%" -c "import streamlit,pandas,openpyxl; import popis_core,popis_core_patch,popis_data,popis_runtime; print('Motor POPIS OK')"
+echo [3/7] Verificando motor POPIS y generadores de reportes...
+"%PY%" -c "import streamlit,pandas,openpyxl,docx,PIL; import popis_core,popis_core_patch,popis_data,popis_runtime,popis_reports; print('Motor POPIS 4.4 OK')"
 if errorlevel 1 goto :install_error
 
-echo [4/7] Verificando interfaz POPIS 4.3.6...
+echo [4/7] Verificando interfaz POPIS 4.4.0...
 if not exist "app_bootstrap.py" goto :app_error
-if not exist "app_v44.py" goto :app_error
-findstr /c:"4.3.6-territory" "app_v44.py" >nul
+if not exist "app_v45.py" goto :app_error
+findstr /c:"4.4.0-reports" "app_v45.py" >nul
 if errorlevel 1 goto :version_error
-echo       Interfaz 4.3.6-territory localizada.
+echo       Interfaz 4.4.0-reports localizada.
 
 echo [5/7] Seleccionando puerto libre...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$l=New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback,0); $l.Start(); $p=$l.LocalEndpoint.Port; $l.Stop(); Set-Content -LiteralPath '%PORTFILE%' -Value $p"
@@ -63,7 +63,7 @@ set /p PORT=<"%PORTFILE%"
 if not defined PORT goto :port_error
 echo       Puerto nuevo: !PORT!
 
-echo [6/7] Iniciando servidor POPIS 4.3.6...
+echo [6/7] Iniciando servidor POPIS 4.4.0...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$args=@('-m','streamlit','run','app_bootstrap.py','--server.address','127.0.0.1','--server.port','!PORT!','--browser.gatherUsageStats','false'); $p=Start-Process -FilePath '%PY%' -ArgumentList $args -WorkingDirectory '%CD%' -RedirectStandardOutput '%LOGOUT%' -RedirectStandardError '%LOGERR%' -PassThru; Set-Content -LiteralPath '%PIDFILE%' -Value $p.Id"
 if errorlevel 1 goto :server_error
 
@@ -73,11 +73,11 @@ if errorlevel 1 goto :health_error
 
 echo.
 echo ===============================================================
-echo  POPIS 4.3.6 ESTA ACTIVO
+echo  POPIS 4.4.0 ESTA ACTIVO
 echo  http://127.0.0.1:!PORT!
 echo.
 echo  EN LA BARRA LATERAL DEBE DECIR:
-echo  POPIS 4.3.6-territory
+echo  POPIS 4.4.0-reports
 echo ===============================================================
 echo.
 powershell.exe -NoProfile -Command "Start-Process 'http://127.0.0.1:!PORT!'"
@@ -112,12 +112,12 @@ pause
 exit /b 1
 
 :app_error
-echo ERROR: faltan app_bootstrap.py o app_v44.py en %CD%
+echo ERROR: faltan app_bootstrap.py o app_v45.py en %CD%
 pause
 exit /b 1
 
 :version_error
-echo ERROR: app_v44.py no corresponde a POPIS 4.3.6-territory.
+echo ERROR: app_v45.py no corresponde a POPIS 4.4.0-reports.
 echo Reemplaza los archivos del programa con el ZIP completo mas reciente.
 pause
 exit /b 1
