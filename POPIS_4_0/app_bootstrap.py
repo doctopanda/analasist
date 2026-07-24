@@ -1,12 +1,10 @@
-"""Arranque POPIS 4.3.6 con verificación estricta de interfaz."""
+"""Arranque POPIS 4.4.0 con verificación estricta de interfaz."""
 from pathlib import Path
-
 from popis_runtime import activate
 
 activate()
-
-EXPECTED_BUILD = "4.3.6-territory"
-app_path = Path(__file__).with_name("app_v44.py")
+EXPECTED_BUILD = "4.4.0-reports"
+app_path = Path(__file__).with_name("app_v45.py")
 if not app_path.exists():
     raise RuntimeError(f"No encuentro la interfaz requerida: {app_path.name}")
 source = app_path.read_text(encoding="utf-8")
