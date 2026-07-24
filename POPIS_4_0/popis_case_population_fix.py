@@ -33,10 +33,14 @@ def fix_sinave_residence(df: pd.DataFrame) -> pd.DataFrame:
         ["Edo_Res", "EDO_RES", "Estado_Residencia", "Estado Residencia", "Ent_Res", "Entidad_Residencia"],
     )
     if "state_residence" not in out:
-        out["state_residence"] = np.nan
+        out["state_residence"] = pd.Series(pd.NA, index=out.index, dtype="object")
+    else:
+        # pandas 3 ya no permite introducir strings de forma implícita en una
+        # columna float creada originalmente con NaN.
+        out["state_residence"] = out["state_residence"].astype("object")
     if state_source:
         missing = _blank(out["state_residence"])
-        out.loc[missing, "state_residence"] = out.loc[missing, state_source]
+        out.loc[missing, "state_residence"] = out.loc[missing, state_source].astype("object")
 
     out["state_key"] = out["state_residence"].fillna("").map(core._norm_text)
     out["sonora_resident"] = out["state_key"].eq("SONORA")
