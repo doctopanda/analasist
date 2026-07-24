@@ -1,13 +1,15 @@
-"""Gestor local de fuentes para POPIS 4.x.
+"""Gestor local y persistente de fuentes para POPIS 4.x.
 
-Los datos nominales SINAVE se mantienen SOLO en la computadora del usuario.
-Este módulo busca históricos congelados y archivos actuales en data/ y permite
-reemplazar el archivo semanal sin volver a cargar todo desde la interfaz.
+Los datos nominales SINAVE permanecen SOLO en la computadora del usuario.
+A partir de POPIS 4.3.1 las fuentes se almacenan fuera de la carpeta de cada
+versión, en %LOCALAPPDATA%/POPIS4/data (Windows), para que una actualización
+del programa no deje las bases "atrás" en el ZIP anterior.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import os
 import shutil
 
 import pandas as pd
@@ -16,7 +18,18 @@ import popis_core as core
 from popis_population import read_population_projection
 
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
+LEGACY_DATA = ROOT / "data"
+
+# Permite override explícito para instalaciones institucionales o pruebas.
+if os.environ.get("POPIS_DATA_DIR"):
+    DATA = Path(os.environ["POPIS_DATA_DIR"]).expanduser()
+else:
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        DATA = Path(local_appdata) / "POPIS4" / "data"
+    else:
+        DATA = Path.home() / ".popis4" / "data"
+
 SINAVE_HIST = DATA / "sinave" / "historico"
 SINAVE_CURRENT = DATA / "sinave" / "actual"
 SUIVE_HIST = DATA / "suive" / "historico"
@@ -36,7 +49,36 @@ class SourceBundle:
     warnings: list[str]
 
 
+def _copy_missing_tree(source: Path, destination: Path) -> int:
+    """Copia archivos faltantes sin sobrescribir la base persistente existente."""
+    if not source.exists() or source.resolve() == destination.resolve():
+        return 0
+    copied = 0
+    for src in source.rglob("*"):
+        if not src.is_file():
+            continue
+        rel = src.relative_to(source)
+        dst = destination / rel
+        if dst.exists():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(src, dst)
+            copied += 1
+        except OSError:
+            # La migración nunca debe impedir que POPIS arranque.
+            pass
+    return copied
+
+
 def ensure_tree() -> None:
+    DATA.mkdir(parents=True, exist_ok=True)
+
+    # Migración automática desde data/ de la carpeta actualmente ejecutada.
+    # Así una instalación que ya contenía bases no las pierde al adoptar el
+    # almacenamiento persistente.
+    _copy_missing_tree(LEGACY_DATA, DATA)
+
     for folder in [SINAVE_HIST, SINAVE_CURRENT, SUIVE_HIST, SUIVE_CURRENT, POPULATION_DIR]:
         folder.mkdir(parents=True, exist_ok=True)
 
@@ -59,7 +101,7 @@ def _inventory_row(system: str, role: str, path: Path, status: str = "Disponible
 
 
 def load_preloaded_sources() -> SourceBundle:
-    """Carga los datos locales. Los archivos actuales prevalecen sobre históricos SUIVE."""
+    """Carga SUIVE, SINAVE y población desde el almacén local persistente."""
     ensure_tree()
     warnings: list[str] = []
     inventory: list[dict] = []
@@ -99,20 +141,24 @@ def load_preloaded_sources() -> SourceBundle:
     else:
         suive = pd.DataFrame()
 
-    # Población municipal por año, sexo y grupo etario. Se utiliza el archivo
-    # más reciente y se normaliza a formato LONG para tasas y análisis demográfico.
+    # Población municipal por año, sexo y grupo etario.
     pop_files = _files(POPULATION_DIR, TABLE_EXTS)
     population = pd.DataFrame()
     if pop_files:
         p = max(pop_files, key=lambda x: x.stat().st_mtime)
         try:
             population = read_population_projection(p, p.name)
-            years = pd.to_numeric(population.get("Año"), errors="coerce").dropna()
+            years = pd.to_numeric(population.get("Año", pd.Series(dtype=float)), errors="coerce").dropna()
             detail = f"{len(population):,} filas; {int(years.min())}-{int(years.max())}" if len(years) else f"{len(population):,} filas"
             inventory.append(_inventory_row("POBLACIÓN", "Municipio × edad × sexo", p, detail=detail))
         except Exception as exc:
             warnings.append(f"Población {p.name}: {exc}")
             inventory.append(_inventory_row("POBLACIÓN", "Denominadores", p, "Error", str(exc)))
+
+    # Si no hay fuentes, indicar dónde está buscando POPIS. Esto evita que un
+    # directorio vacío parezca un fallo de cálculo.
+    if not inventory:
+        warnings.append(f"No se encontraron fuentes locales en: {DATA}")
 
     return SourceBundle(
         suive=suive,
