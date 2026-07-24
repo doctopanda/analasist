@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test dependencies
-        run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0" "python-docx>=1.1,<2" "Pillow>=10,<13"
+        run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0" "matplotlib>=3.8,<4" "python-docx>=1.1,<2" "Pillow>=10,<13"
       - name: Compile Python
         working-directory: POPIS_4_0
         run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_v45.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_case_population_fix.py popis_spatial.py popis_reports.py
