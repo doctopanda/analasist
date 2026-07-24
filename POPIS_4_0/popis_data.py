@@ -1,13 +1,19 @@
 """Gestor local y persistente de fuentes para POPIS 4.x.
 
 Los datos nominales SINAVE permanecen SOLO en la computadora del usuario.
-A partir de POPIS 4.3.1 las fuentes se almacenan fuera de la carpeta de cada
-versión, en %LOCALAPPDATA%/POPIS4/data (Windows), para que una actualización
-del programa no deje las bases "atrás" en el ZIP anterior.
+Las fuentes se almacenan fuera de la carpeta de cada versión, en
+%LOCALAPPDATA%/POPIS4/data (Windows), para que actualizar el programa no deje
+las bases atrás.
+
+Desde POPIS 4.4, una actualización semanal SUIVE se valida ANTES de reemplazar
+el corte anterior. Un archivo que no contenga una serie positiva del año actual
+no puede borrar silenciosamente los datos válidos ya existentes.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
+from io import BytesIO
 from pathlib import Path
 import os
 import shutil
@@ -20,7 +26,6 @@ from popis_population import read_population_projection
 ROOT = Path(__file__).resolve().parent
 LEGACY_DATA = ROOT / "data"
 
-# Permite override explícito para instalaciones institucionales o pruebas.
 if os.environ.get("POPIS_DATA_DIR"):
     DATA = Path(os.environ["POPIS_DATA_DIR"]).expanduser()
 else:
@@ -50,7 +55,6 @@ class SourceBundle:
 
 
 def _copy_missing_tree(source: Path, destination: Path) -> int:
-    """Copia archivos faltantes sin sobrescribir la base persistente existente."""
     if not source.exists() or source.resolve() == destination.resolve():
         return 0
     copied = 0
@@ -66,19 +70,13 @@ def _copy_missing_tree(source: Path, destination: Path) -> int:
             shutil.copy2(src, dst)
             copied += 1
         except OSError:
-            # La migración nunca debe impedir que POPIS arranque.
             pass
     return copied
 
 
 def ensure_tree() -> None:
     DATA.mkdir(parents=True, exist_ok=True)
-
-    # Migración automática desde data/ de la carpeta actualmente ejecutada.
-    # Así una instalación que ya contenía bases no las pierde al adoptar el
-    # almacenamiento persistente.
     _copy_missing_tree(LEGACY_DATA, DATA)
-
     for folder in [SINAVE_HIST, SINAVE_CURRENT, SUIVE_HIST, SUIVE_CURRENT, POPULATION_DIR]:
         folder.mkdir(parents=True, exist_ok=True)
 
@@ -100,13 +98,65 @@ def _inventory_row(system: str, role: str, path: Path, status: str = "Disponible
     }
 
 
+def inspect_suive_payload(payload: bytes, filename: str) -> dict:
+    """Lee un posible corte SUIVE y devuelve un diagnóstico antes de guardarlo."""
+    frame = core.parse_suive_history(BytesIO(payload), filename)
+    if frame.empty:
+        raise ValueError("El archivo SUIVE no produjo ninguna serie semanal.")
+    frame = frame.copy()
+    frame["Año"] = pd.to_numeric(frame["Año"], errors="coerce")
+    frame["SE"] = pd.to_numeric(frame["SE"], errors="coerce")
+    frame["Casos"] = pd.to_numeric(frame["Casos"], errors="coerce")
+    frame = frame.dropna(subset=["Año", "SE", "Casos"])
+    if frame.empty:
+        raise ValueError("El archivo SUIVE no contiene año, semana y casos numéricos reconocibles.")
+
+    years = sorted(frame["Año"].astype(int).unique().tolist())
+    latest_year = max(years)
+    latest = frame[frame["Año"].eq(latest_year)].sort_values("SE")
+    positive = latest[latest["Casos"].gt(0)]
+    last_se = int(positive["SE"].max()) if not positive.empty else 0
+    accumulated = float(latest.loc[latest["SE"].le(last_se), "Casos"].sum()) if last_se else 0.0
+    last_week_cases = float(latest.loc[latest["SE"].eq(last_se), "Casos"].sum()) if last_se else 0.0
+
+    return {
+        "frame": frame,
+        "years": years,
+        "latest_year": latest_year,
+        "last_se": last_se,
+        "accumulated": accumulated,
+        "last_week_cases": last_week_cases,
+        "positive_weeks": int(len(positive)),
+    }
+
+
+def inspect_suive_upload(uploaded) -> dict:
+    payload = uploaded.getvalue() if hasattr(uploaded, "getvalue") else uploaded.read()
+    return inspect_suive_payload(payload, getattr(uploaded, "name", "SUIVE.xlsx"))
+
+
+def _validate_weekly_suive(payload: bytes, filename: str) -> dict:
+    info = inspect_suive_payload(payload, filename)
+    current_year = date.today().year
+    if info["latest_year"] < current_year:
+        raise ValueError(
+            f"El archivo semanal SUIVE termina en {info['latest_year']} y no contiene el año actual {current_year}. "
+            "No se reemplazó el corte anterior."
+        )
+    if info["positive_weeks"] == 0 or info["accumulated"] <= 0:
+        raise ValueError(
+            f"La serie SUIVE {info['latest_year']} fue interpretada con 0 casos. "
+            "Esto suele ocurrir cuando el libro trae fórmulas sin valores calculados o se seleccionó una tabla incorrecta. "
+            "No se reemplazó el corte anterior."
+        )
+    return info
+
+
 def load_preloaded_sources() -> SourceBundle:
-    """Carga SUIVE, SINAVE y población desde el almacén local persistente."""
     ensure_tree()
     warnings: list[str] = []
     inventory: list[dict] = []
 
-    # SINAVE nominal: históricos + archivo semanal actual.
     sinave_paths = _files(SINAVE_HIST, TABLE_EXTS) + _files(SINAVE_CURRENT, TABLE_EXTS)
     sinave = pd.DataFrame()
     if sinave_paths:
@@ -120,12 +170,19 @@ def load_preloaded_sources() -> SourceBundle:
             for p in sinave_paths:
                 inventory.append(_inventory_row("SINAVE", "Local", p, "Error", str(exc)))
 
-    # SUIVE: histórico y actual. El actual reemplaza Año-SE coincidente.
+    # SUIVE: histórico y actual. El actual reemplaza solamente Año-SE coincidente.
     suive_frames: list[pd.DataFrame] = []
     for role, folder in [("Histórico", SUIVE_HIST), ("Actual semanal", SUIVE_CURRENT)]:
         for p in _files(folder, EXCEL_EXTS):
             try:
                 frame = core.parse_suive_history(p, p.name)
+                # Protección adicional: un corte semanal completamente cero no debe
+                # anular una serie histórica positiva del mismo año.
+                if role == "Actual semanal":
+                    latest_year = int(pd.to_numeric(frame["Año"], errors="coerce").max())
+                    latest = frame[pd.to_numeric(frame["Año"], errors="coerce").eq(latest_year)]
+                    if latest.empty or pd.to_numeric(latest["Casos"], errors="coerce").fillna(0).gt(0).sum() == 0:
+                        raise ValueError(f"corte semanal {latest_year} interpretado con 0 casos; se conserva el histórico")
                 frame["_role"] = role
                 frame["_source"] = p.name
                 suive_frames.append(frame)
@@ -141,7 +198,6 @@ def load_preloaded_sources() -> SourceBundle:
     else:
         suive = pd.DataFrame()
 
-    # Población municipal por año, sexo y grupo etario.
     pop_files = _files(POPULATION_DIR, TABLE_EXTS)
     population = pd.DataFrame()
     if pop_files:
@@ -155,8 +211,6 @@ def load_preloaded_sources() -> SourceBundle:
             warnings.append(f"Población {p.name}: {exc}")
             inventory.append(_inventory_row("POBLACIÓN", "Denominadores", p, "Error", str(exc)))
 
-    # Si no hay fuentes, indicar dónde está buscando POPIS. Esto evita que un
-    # directorio vacío parezca un fallo de cálculo.
     if not inventory:
         warnings.append(f"No se encontraron fuentes locales en: {DATA}")
 
@@ -170,26 +224,33 @@ def load_preloaded_sources() -> SourceBundle:
 
 
 def save_current(uploaded, system: str) -> Path:
-    """Guarda/reemplaza una fuente semanal desde un UploadedFile de Streamlit."""
+    """Valida y reemplaza atómicamente una fuente semanal."""
     ensure_tree()
     system = system.upper().strip()
+    payload = uploaded.getvalue() if hasattr(uploaded, "getvalue") else uploaded.read()
+    suffix = Path(uploaded.name).suffix.lower()
+
     if system == "SINAVE":
-        destination = SINAVE_CURRENT / f"Diarreas_actual{Path(uploaded.name).suffix.lower()}"
-        for old in _files(SINAVE_CURRENT, TABLE_EXTS):
-            old.unlink(missing_ok=True)
+        folder = SINAVE_CURRENT
+        destination = folder / f"Diarreas_actual{suffix}"
     elif system == "SUIVE":
-        destination = SUIVE_CURRENT / f"SUIVE_actual{Path(uploaded.name).suffix.lower()}"
-        for old in _files(SUIVE_CURRENT, TABLE_EXTS):
-            old.unlink(missing_ok=True)
+        folder = SUIVE_CURRENT
+        destination = folder / f"SUIVE_actual{suffix}"
+        _validate_weekly_suive(payload, uploaded.name)
     else:
         raise ValueError("system debe ser SINAVE o SUIVE")
-    payload = uploaded.getvalue() if hasattr(uploaded, "getvalue") else uploaded.read()
-    destination.write_bytes(payload)
+
+    # Primero escribir temporalmente. Solo después borrar el corte anterior.
+    temp = folder / f".__popis_tmp__{suffix}"
+    temp.write_bytes(payload)
+    for old in _files(folder, TABLE_EXTS):
+        if old != temp:
+            old.unlink(missing_ok=True)
+    temp.replace(destination)
     return destination
 
 
 def add_historical(uploaded, system: str) -> Path:
-    """Agrega un histórico anual. No sobreescribe silenciosamente otro histórico."""
     ensure_tree()
     system = system.upper().strip()
     folder = SINAVE_HIST if system == "SINAVE" else SUIVE_HIST if system == "SUIVE" else None
