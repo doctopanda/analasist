@@ -8,12 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 import shutil
 
 import pandas as pd
 
 import popis_core as core
+from popis_population import read_population_projection
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -64,8 +64,7 @@ def load_preloaded_sources() -> SourceBundle:
     warnings: list[str] = []
     inventory: list[dict] = []
 
-    # SINAVE nominal: históricos + archivo semanal actual. El actual se coloca al final
-    # para que el combinador pueda preferir la versión más reciente de un folio repetido.
+    # SINAVE nominal: históricos + archivo semanal actual.
     sinave_paths = _files(SINAVE_HIST, TABLE_EXTS) + _files(SINAVE_CURRENT, TABLE_EXTS)
     sinave = pd.DataFrame()
     if sinave_paths:
@@ -79,8 +78,7 @@ def load_preloaded_sources() -> SourceBundle:
             for p in sinave_paths:
                 inventory.append(_inventory_row("SINAVE", "Local", p, "Error", str(exc)))
 
-    # SUIVE puede tener un workbook histórico y otro actual. Si ambos incluyen la misma
-    # combinación Año-SE, el archivo actual reemplaza el valor histórico.
+    # SUIVE: histórico y actual. El actual reemplaza Año-SE coincidente.
     suive_frames: list[pd.DataFrame] = []
     for role, folder in [("Histórico", SUIVE_HIST), ("Actual semanal", SUIVE_CURRENT)]:
         for p in _files(folder, EXCEL_EXTS):
@@ -101,17 +99,20 @@ def load_preloaded_sources() -> SourceBundle:
     else:
         suive = pd.DataFrame()
 
-    # Población: se utiliza el archivo más reciente por fecha de modificación.
+    # Población municipal por año, sexo y grupo etario. Se utiliza el archivo
+    # más reciente y se normaliza a formato LONG para tasas y análisis demográfico.
     pop_files = _files(POPULATION_DIR, TABLE_EXTS)
     population = pd.DataFrame()
     if pop_files:
         p = max(pop_files, key=lambda x: x.stat().st_mtime)
         try:
-            population = core.read_any_table(p, p.name)
-            inventory.append(_inventory_row("CONAPO", "Denominadores", p))
+            population = read_population_projection(p, p.name)
+            years = pd.to_numeric(population.get("Año"), errors="coerce").dropna()
+            detail = f"{len(population):,} filas; {int(years.min())}-{int(years.max())}" if len(years) else f"{len(population):,} filas"
+            inventory.append(_inventory_row("POBLACIÓN", "Municipio × edad × sexo", p, detail=detail))
         except Exception as exc:
             warnings.append(f"Población {p.name}: {exc}")
-            inventory.append(_inventory_row("CONAPO", "Denominadores", p, "Error", str(exc)))
+            inventory.append(_inventory_row("POBLACIÓN", "Denominadores", p, "Error", str(exc)))
 
     return SourceBundle(
         suive=suive,
@@ -128,7 +129,6 @@ def save_current(uploaded, system: str) -> Path:
     system = system.upper().strip()
     if system == "SINAVE":
         destination = SINAVE_CURRENT / f"Diarreas_actual{Path(uploaded.name).suffix.lower()}"
-        # Un solo archivo actual: elimina versiones previas para evitar duplicidad.
         for old in _files(SINAVE_CURRENT, TABLE_EXTS):
             old.unlink(missing_ok=True)
     elif system == "SUIVE":
@@ -159,7 +159,7 @@ def add_historical(uploaded, system: str) -> Path:
 
 def save_population(uploaded) -> Path:
     ensure_tree()
-    destination = POPULATION_DIR / f"Sonora_CONAPO{Path(uploaded.name).suffix.lower()}"
+    destination = POPULATION_DIR / f"Sonora_Poblacion_Municipal_Edad_Sexo{Path(uploaded.name).suffix.lower()}"
     for old in _files(POPULATION_DIR, TABLE_EXTS):
         old.unlink(missing_ok=True)
     payload = uploaded.getvalue() if hasattr(uploaded, "getvalue") else uploaded.read()
