@@ -31,7 +31,7 @@ jobs:
           from popis_runtime import activate
           from popis_core_patch import canonical_municipality
           activate()
-          df=pd.DataFrame({'Folio':['BOUNDARY','A','B','REJECT'],'Fec_captura':['05/01/2026','05/01/2026','10/01/2026','10/02/2026'],'Fecha_Inicio':['02/01/2026','04/01/2026','09/01/2026','09/02/2026'],'SemanaInicio':[53,1,2,6],'Fec_Primer_Contacto':['04/01/2026','04/01/2026','09/01/2026','09/02/2026'],'Fec_Dx_Final':['15/01/2026','06/01/2026','12/01/2026','12/02/2026'],'Diag_Final':['SALMONELOSIS','NEGATIVO','SHIGELOSIS','SIN DX MUESTRAS RECHAZADAS'],'Salmonella':['POSITIVO','NEGATIVO','NEGATIVO','NEGATIVO'],'Shigella':['NEGATIVO','NEGATIVO','POSITIVO','NEGATIVO'],'Edo_Res':['SONORA']*4,'Mun_Res':['BENITO JUAREZ   SON','ROSARIO SON','HERMOSILLO','HERMOSILLO'],'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','ADECUADA','RECHAZO DEFINITIVO']})
+          df=pd.DataFrame({'Folio':['BOUNDARY','A','B','REJECT'],'Fec_captura':['05/01/2026','05/01/2026','10/01/2026','10/02/2026'],'Fecha_Inicio':['02/01/2026','04/01/2026','09/01/2026','09/02/2026'],'SemanaInicio':[53,1,2,6],'Fec_Primer_Contacto':['04/01/2026','04/01/2026','09/01/2026','09/02/2026'],'Fec_Dx_Final':['15/01/2026','06/01/2026','12/01/2026','12/02/2026'],'Diag_Final':['SALMONELOSIS','NEGATIVO','SHIGELOSIS','SIN DX MUESTRAS RECHAZADAS'],'Salmonella':['POSITIVO','NEGATIVO','NEGATIVO','NEGATIVO'],'Shigella':['NEGATIVO','NEGATIVO','POSITIVO','NEGATIVO'],'Ent_Res':['SONORA']*4,'Mun_Res':['BENITO JUAREZ   SON','ROSARIO SON','HERMOSILLO','HERMOSILLO'],'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','ADECUADA','RECHAZO DEFINITIVO']})
           n=core.normalize_sinave(df,'actual')
           assert int(n.loc[n.folio.eq('BOUNDARY'),'epi_year'].iloc[0])==2025
           assert canonical_municipality('BENITO JUAREZ   SON')=='Benito Juárez' and canonical_municipality('ROSARIO SON')=='Rosario'
@@ -94,7 +94,7 @@ jobs:
         shell: pwsh
         run: |
           @'
-          import io,pandas as pd
+          import pandas as pd
           from popis_population import _normalize_frame, demographic_profile, pyramid, age_sex_rates
           import popis_core as core
           from popis_runtime import activate
@@ -108,7 +108,7 @@ jobs:
           pop=_normalize_frame(popraw,'synthetic')
           prof=demographic_profile(pop,2026,'Hermosillo'); assert int(prof['Población'])==5400 and int(prof['Hombres'])==2700 and int(prof['Mujeres'])==2700
           pyr=pyramid(pop,2026,'Hermosillo'); assert set(['Hombres','Mujeres']).issubset(pyr.columns)
-          sinraw=pd.DataFrame({'Folio':['A','B'],'Fec_captura':['05/01/2026','05/01/2026'],'Fecha_Inicio':['04/01/2026','04/01/2026'],'SemanaInicio':[1,1],'Mun_Res':['Hermosillo','Hermosillo'],'Edo_Res':['SONORA','SONORA'],'Sexo':['HOMBRE','MUJER'],'Edad_Años':[3,67],'Diag_Final':['NEGATIVO','NEGATIVO']})
+          sinraw=pd.DataFrame({'Folio':['A','B'],'Fec_captura':['05/01/2026','05/01/2026'],'Fecha_Inicio':['04/01/2026','04/01/2026'],'SemanaInicio':[1,1],'Mun_Res':['Hermosillo','Hermosillo'],'Ent_Res':['SONORA','SONORA'],'Sexo':['HOMBRE','MUJER'],'Edad_Años':[3,67],'Diag_Final':['NEGATIVO','NEGATIVO']})
           sin=core.normalize_sinave(sinraw,'test')
           rates=age_sex_rates(sin,pop,2026,1,'Hermosillo'); assert rates['Casos'].sum()==2 and rates['Población'].sum()==5400
           print('POPULATION ENGINE OK')
