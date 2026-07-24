@@ -21,6 +21,27 @@ jobs:
         working-directory: POPIS_4_0
         run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_case_population_fix.py popis_spatial.py
 
+      - name: Test active build wiring
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          bootstrap=Path('app_bootstrap.py').read_text(encoding='utf-8')
+          ui=Path('app_v44.py').read_text(encoding='utf-8')
+          launcher=Path('INICIAR_POPIS.bat').read_text(encoding='utf-8-sig')
+          assert 'app_v44.py' in bootstrap
+          assert '4.3.6-territory' in bootstrap
+          assert '4.3.6-territory' in ui
+          assert '4.3.6-territory' in launcher
+          assert '[1000,10000,100000]' in ui
+          assert 'Tasa casos del {scope_noun} / población estatal' in ui
+          assert 'Razón incidencia {scope_word} / incidencia estatal SINAVE' in ui
+          assert 'map_base' in ui and 'how="left"' in ui
+          print('ACTIVE BUILD 4.3.6 WIRING OK')
+          '@ | Set-Content -Encoding utf8 test_build_wiring.py
+          python test_build_wiring.py
+
       - name: Test real SINAVE edge cases
         working-directory: POPIS_4_0
         shell: pwsh
@@ -133,12 +154,25 @@ jobs:
           '@ | Set-Content -Encoding utf8 test_territory_rates.py
           python test_territory_rates.py
 
+      - name: Test complete municipality mappings
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          from popis_core_patch import _DISTRICT_BY_MUN, _REGION_BY_MUN
+          assert len(_DISTRICT_BY_MUN)==72, len(_DISTRICT_BY_MUN)
+          assert len(_REGION_BY_MUN)==72, len(_REGION_BY_MUN)
+          assert set(_DISTRICT_BY_MUN)==set(_REGION_BY_MUN)
+          print('72 MUNICIPALITY MAPPINGS OK')
+          '@ | Set-Content -Encoding utf8 test_municipalities.py
+          python test_municipalities.py
+
       - name: Package POPIS
         shell: pwsh
-        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_3_5_WINDOWS.zip -Force
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_3_6_WINDOWS.zip -Force
       - name: Upload POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_3_5_WINDOWS
-          path: POPIS_4_3_5_WINDOWS.zip
+          name: POPIS_4_3_6_WINDOWS
+          path: POPIS_4_3_6_WINDOWS.zip
           retention-days: 30
