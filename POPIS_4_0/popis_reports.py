@@ -62,7 +62,7 @@ def _fmt(v, digits=1):
 
 def make_word_report(context: dict[str, Any], tables: dict[str, pd.DataFrame], images: dict[str, bytes]) -> bytes:
     from docx import Document
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     doc = Document()
@@ -86,11 +86,13 @@ def make_word_report(context: dict[str, Any], tables: dict[str, pd.DataFrame], i
     doc.add_paragraph(text)
     doc.add_paragraph("SUIVE y SINAVE son sistemas de vigilancia con universos distintos; sus conteos y tasas no deben sumarse ni interpretarse como equivalentes.")
 
-    top = tables.get("Tasas municipal") or tables.get("Tasas municipales")
+    top = tables.get("Tasas municipal")
+    if top is None:
+        top = tables.get("Tasas municipales")
     if isinstance(top, pd.DataFrame) and not top.empty:
         inc_cols = [c for c in top.columns if str(c).startswith("Incidencia municipal")]
         ratio_cols = [c for c in top.columns if str(c).startswith("Razón incidencia municipal")]
-        if inc_cols:
+        if inc_cols and "Municipio" in top.columns:
             t = top.sort_values(inc_cols[0], ascending=False).head(5)
             names = ", ".join(t["Municipio"].astype(str).tolist())
             doc.add_paragraph(f"Los municipios con mayor incidencia en el corte son: {names}. Estos territorios ameritan revisión conjunta con volumen de casos, tendencia semanal y concentración espacial.")
