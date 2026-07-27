@@ -1,0 +1,155 @@
+name: Test POPIS 4.7 Integrado
+
+on:
+  push:
+    branches:
+      - popis-4.7-integrado-autocarga
+    paths:
+      - 'POPIS_4_7_INTEGRADO/**'
+      - 'POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py'
+      - '.github/workflows/test-popis-4-7-integrado.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'POPIS_4_7_INTEGRADO/**'
+      - 'POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py'
+      - '.github/workflows/test-popis-4-7-integrado.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: POPIS_4_7_INTEGRADO/requirements_47.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r POPIS_4_7_INTEGRADO/requirements_47.txt
+
+      - name: Assemble integrated module
+        run: |
+          cp POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py POPIS_4_7_INTEGRADO/modulos/mapa_espacial.py
+          touch POPIS_4_7_INTEGRADO/modulos/__init__.py
+
+      - name: Compile Python
+        run: |
+          python -m py_compile POPIS_4_7_INTEGRADO/modulos/autocarga.py
+          python -m py_compile POPIS_4_7_INTEGRADO/modulos/mapa_integrado.py
+          python -m py_compile POPIS_4_7_INTEGRADO/pages/00_Centro_de_Datos.py
+          python -m py_compile POPIS_4_7_INTEGRADO/pages/08_Mapa_Territorial.py
+          python -m py_compile POPIS_4_7_INTEGRADO/INSTALAR_POPIS_4_7.py
+
+      - name: Synthetic integration test
+        run: |
+          PYTHONPATH=POPIS_4_7_INTEGRADO python - <<'PY'
+          from pathlib import Path
+          import json
+          import tempfile
+          import pandas as pd
+
+          from modulos.autocarga import (
+              discover_project_assets,
+              load_sinave_bundle,
+              normalize_population_table,
+              process_inbox,
+          )
+          from modulos.mapa_integrado import add_pathogen_label, prepare_integrated_coordinates
+          from modulos.mapa_espacial import prepare_map_points
+
+          def write_tsv(path, rows):
+              path.parent.mkdir(parents=True, exist_ok=True)
+              pd.DataFrame(rows).to_csv(path, sep='\t', index=False, encoding='latin-1')
+
+          with tempfile.TemporaryDirectory() as tmp:
+              root = Path(tmp) / 'POPIS'
+              (root / 'data' / 'historicos').mkdir(parents=True)
+              (root / 'data' / 'actual').mkdir(parents=True)
+              (root / 'data' / 'poblacion').mkdir(parents=True)
+              (root / 'data' / 'geografia').mkdir(parents=True)
+              (root / 'data' / 'entrada').mkdir(parents=True)
+              (root / 'app.py').write_text('# synthetic POPIS\n', encoding='utf-8')
+
+              write_tsv(root / 'data' / 'historicos' / 'Diarreas_2022.xls', [
+                  {'Fec_captura':'10/06/2022','SemanaInicio':23,'Folio':'22-A','Mun_Res':'HERMOSILLO','Salmonella':'Positivo'},
+              ])
+              write_tsv(root / 'data' / 'actual' / 'Diarreas_actual.xls', [
+                  {'Fec_captura':'20/07/2026','SemanaInicio':28,'Folio':'26-A','Mun_Res':'HERMOSILLO','Shigella':'Positivo','Latitud':'29.08','Longitud':'-110.96'},
+                  {'Fec_captura':'20/07/2026','SemanaInicio':28,'Folio':'26-B','Mun_Res':'CAJEME','Shigella':''},
+              ])
+
+              pd.DataFrame([
+                  {'Municipio':'HERMOSILLO','Poblacion':1000000,'Año':2026},
+                  {'Municipio':'CAJEME','Poblacion':450000,'Año':2026},
+              ]).to_csv(root / 'data' / 'poblacion' / 'poblacion_municipal.csv', index=False)
+
+              geo = {
+                  'type':'FeatureCollection',
+                  'features':[
+                      {'type':'Feature','properties':{'NOMGEO':'HERMOSILLO'},'geometry':{'type':'Polygon','coordinates':[[[-111.2,28.8],[-110.7,28.8],[-110.7,29.3],[-111.2,29.3],[-111.2,28.8]]]}},
+                      {'type':'Feature','properties':{'NOMGEO':'CAJEME'},'geometry':{'type':'Polygon','coordinates':[[[-110.2,27.2],[-109.6,27.2],[-109.6,27.8],[-110.2,27.8],[-110.2,27.2]]]}}
+                  ]
+              }
+              (root / 'data' / 'geografia' / 'municipios_sonora.geojson').write_text(json.dumps(geo), encoding='utf-8')
+
+              assets = discover_project_assets(root)
+              assert sorted(assets.sinave_by_year) == [2022, 2026]
+              assert assets.current_year == 2026
+              assert assets.cutoff_week == 28
+              assert assets.municipal_geojson is not None
+              assert assets.population_file is not None
+
+              base = add_pathogen_label(load_sinave_bundle(assets))
+              assert len(base) == 3
+              assert 'Patógenos identificados' in base.columns
+
+              pop = normalize_population_table(assets.population_file, 2026)
+              assert pop is not None and int(pop['Poblacion'].sum()) == 1450000
+
+              current = base[pd.to_numeric(base['Año'], errors='coerce').eq(2026)].copy()
+              prepared = prepare_integrated_coordinates(current, geo)
+              points = prepare_map_points(prepared, '__lat_auto', '__lon_auto', '__src_auto')
+              assert len(points) == 2
+              assert int(points['__precision_coord'].eq('Exacta').sum()) == 1
+              assert int(points['__precision_coord'].eq('Aproximada').sum()) == 1
+
+              # Simula actualización semanal: SE29 en la bandeja vigilada.
+              write_tsv(root / 'data' / 'entrada' / 'Diarreas_2026-07-27.xls', [
+                  {'Fec_captura':'27/07/2026','SemanaInicio':29,'Folio':'26-C','Mun_Res':'HERMOSILLO','Salmonella':'Positivo'},
+              ])
+              actions = process_inbox(root)
+              assert any(a.status == 'instalado' and a.kind == 'sinave' for a in actions)
+              refreshed = discover_project_assets(root)
+              assert refreshed.cutoff_week == 29
+              assert (root / 'data' / 'actual' / 'Diarreas_actual.xls').exists()
+              assert any((root / 'data' / 'backups').rglob('Diarreas_actual.xls'))
+
+              print('POPIS 4.7 integration tests: OK')
+          PY
+
+      - name: Assemble package
+        run: |
+          rm -rf build_popis47
+          mkdir -p build_popis47/POPIS_4_7_INTEGRADO/modulos
+          cp -R POPIS_4_7_INTEGRADO/. build_popis47/POPIS_4_7_INTEGRADO/
+          cp POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py build_popis47/POPIS_4_7_INTEGRADO/modulos/mapa_espacial.py
+          touch build_popis47/POPIS_4_7_INTEGRADO/modulos/__init__.py
+          find build_popis47 -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find build_popis47 -type f -name '*.pyc' -delete
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: POPIS_4_7_INTEGRADO
+          path: build_popis47
+          if-no-files-found: error
+          retention-days: 30
