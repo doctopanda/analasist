@@ -1,11 +1,11 @@
-"""POPIS 4.6.1: Cubo SUIVE automático + corrección espacial de domicilios numéricos."""
+"""POPIS 4.6.2: Cubo SUIVE automático + API espacial estable."""
 from pathlib import Path
 
 _original_read_text = Path.read_text
 
 
 def _patch_v45(text: str) -> str:
-    text = text.replace("4.4.0-reports", "4.6.1-spatialfix")
+    text = text.replace("4.4.0-reports", "4.6.2-spatialapi")
     text = text.replace(
         'new_suive=st.file_uploader("Nuevo SUIVE actual",type=["xls","xlsx"],key="weekly_suive")',
         'new_suive=st.file_uploader("Cubo / SUIVE actual",type=["xls","xlsx","xlsm"],key="weekly_suive")'
