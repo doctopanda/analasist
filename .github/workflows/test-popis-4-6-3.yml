@@ -7,6 +7,12 @@ on:
     paths:
       - 'POPIS_4_6_3_MAPA_EXACTO/**'
       - '.github/workflows/test-popis-4-6-3.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'POPIS_4_6_3_MAPA_EXACTO/**'
+      - '.github/workflows/test-popis-4-6-3.yml'
   workflow_dispatch:
 
 jobs:
