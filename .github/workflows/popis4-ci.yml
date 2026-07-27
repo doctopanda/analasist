@@ -1,4 +1,4 @@
-name: POPIS 4.5 CI
+name: POPIS 4.6 CI
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ jobs:
         run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0" "matplotlib>=3.8,<4" "python-docx>=1.1,<2" "Pillow>=10,<13"
       - name: Compile Python
         working-directory: POPIS_4_0
-        run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_v45.py app_v46.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_suive_cube.py popis_case_population_fix.py popis_spatial.py popis_reports.py
+        run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_v45.py app_v46.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_suive_cube.py popis_excel_refresh.py popis_case_population_fix.py popis_spatial.py popis_reports.py
       - name: Test active build wiring
         working-directory: POPIS_4_0
         shell: pwsh
@@ -28,8 +28,11 @@ jobs:
           from pathlib import Path
           b=Path('app_bootstrap.py').read_text(encoding='utf-8')
           a=Path('app_v46.py').read_text(encoding='utf-8')
-          assert '4.5.0-cubo' in b and 'app_v46.py' in b
-          assert '4.5.0-cubo' in a
+          bat=Path('INICIAR_POPIS.bat').read_text(encoding='utf-8')
+          assert '4.6.0-auto-suive' in b and 'app_v46.py' in b
+          assert '4.6.0-auto-suive' in a
+          assert '4.6.0-auto-suive' in bat
+          assert 'Actualizar SUIVE desde Excel' in a
           print('BUILD WIRING OK')
           '@ | Set-Content -Encoding utf8 test_build.py
           python test_build.py
@@ -41,21 +44,12 @@ jobs:
           from io import BytesIO
           import pandas as pd
           from popis_suive_cube import parse_suive_auto
-
-          # Layout 1: tabla larga, con dimensión Entidad y dos años.
           b=BytesIO()
-          long=pd.DataFrame({
-              'Entidad':['Sonora']*8,
-              'Año':[2025]*4+[2026]*4,
-              'Semana':[1,2,3,4]*2,
-              'Casos':[80,90,100,110,120,130,140,150]
-          })
+          long=pd.DataFrame({'Entidad':['Sonora']*8,'Año':[2025]*4+[2026]*4,'Semana':[1,2,3,4]*2,'Casos':[80,90,100,110,120,130,140,150]})
           with pd.ExcelWriter(b,engine='openpyxl') as w: long.to_excel(w,index=False,sheet_name='Cubo SUIVE')
           b.seek(0); x=parse_suive_auto(b,'cubo.xlsx')
           assert x.loc[(x['Año']==2026)&(x['SE']==4),'Casos'].iloc[0]==150
           assert x.attrs['popis_source_type']=='Cubo/pivote SUIVE'
-
-          # Layout 2: matriz pivote con semanas en filas y años en columnas.
           b=BytesIO()
           matrix=pd.DataFrame({'SE':[1,2,3,4],2024:[50,60,70,80],2025:[70,80,90,100],2026:[100,120,130,140]})
           with pd.ExcelWriter(b,engine='openpyxl') as w: matrix.to_excel(w,index=False,sheet_name='RIO SONORA')
@@ -64,6 +58,29 @@ jobs:
           print('CUBE LAYOUTS OK')
           '@ | Set-Content -Encoding utf8 test_cube.py
           python test_cube.py
+      - name: Test Excel refresh automation contract
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import tempfile
+          import popis_excel_refresh as er
+          script=er._powershell_refresh_script()
+          for token in ['Excel.Application','RefreshAll','CalculateUntilAsyncQueriesDone','PivotCaches','CalculateFullRebuild','$wb.Save()']:
+              assert token in script, token
+          with tempfile.TemporaryDirectory() as td:
+              p=Path(td)/'cube.xlsx'; p.write_bytes(b'placeholder')
+              old_dir,old_path=er.CUBE_DIR,er.PATH_FILE
+              er.CUBE_DIR=Path(td)/'store'; er.PATH_FILE=er.CUBE_DIR/'source_path.txt'
+              try:
+                  q=er.register_cube_path(p)
+                  assert er.get_cube_source()==q.resolve()
+              finally:
+                  er.CUBE_DIR,er.PATH_FILE=old_dir,old_path
+          print('EXCEL AUTOMATION CONTRACT OK')
+          '@ | Set-Content -Encoding utf8 test_excel_refresh.py
+          python test_excel_refresh.py
       - name: Test SUIVE zero guard
         working-directory: POPIS_4_0
         shell: pwsh
@@ -153,10 +170,10 @@ jobs:
           python test_reports.py
       - name: Package POPIS
         shell: pwsh
-        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_5_0_WINDOWS.zip -Force
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_6_0_WINDOWS.zip -Force
       - name: Upload POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_5_0_WINDOWS
-          path: POPIS_4_5_0_WINDOWS.zip
+          name: POPIS_4_6_0_WINDOWS
+          path: POPIS_4_6_0_WINDOWS.zip
           retention-days: 30
