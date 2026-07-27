@@ -136,7 +136,7 @@ jobs:
               print('POPIS 4.7 integration tests: OK')
           PY
 
-      - name: Build ZIP
+      - name: Assemble package
         run: |
           rm -rf build_popis47
           mkdir -p build_popis47/POPIS_4_7_INTEGRADO/modulos
@@ -145,13 +145,11 @@ jobs:
           touch build_popis47/POPIS_4_7_INTEGRADO/modulos/__init__.py
           find build_popis47 -type d -name '__pycache__' -prune -exec rm -rf {} +
           find build_popis47 -type f -name '*.pyc' -delete
-          cd build_popis47
-          zip -r ../POPIS_4_7_INTEGRADO.zip POPIS_4_7_INTEGRADO
 
-      - name: Upload ZIP
+      - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: POPIS_4_7_INTEGRADO
-          path: POPIS_4_7_INTEGRADO.zip
+          path: build_popis47
           if-no-files-found: error
           retention-days: 30
