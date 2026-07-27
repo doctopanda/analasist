@@ -1,0 +1,7 @@
+pandas>=2.2,<4
+numpy>=1.26,<3
+streamlit==1.59.2
+folium>=0.17,<0.21
+streamlit-folium>=0.24,<0.30
+openpyxl>=3.1,<4
+xlrd>=2.0,<3
