@@ -1,0 +1,150 @@
+name: Test POPIS 5.0 Completo
+
+on:
+  push:
+    branches:
+      - popis-5.0-completo-centroides
+    paths:
+      - 'POPIS_5_0_COMPLETO/**'
+      - 'POPIS_4_7_INTEGRADO/modulos/autocarga.py'
+      - 'POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py'
+      - '.github/workflows/test-popis-5-0-completo.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'POPIS_5_0_COMPLETO/**'
+      - '.github/workflows/test-popis-5-0-completo.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: POPIS_5_0_COMPLETO/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r POPIS_5_0_COMPLETO/requirements.txt
+
+      - name: Assemble inherited automatic loader
+        run: |
+          mkdir -p POPIS_5_0_COMPLETO/modulos
+          cp POPIS_4_7_INTEGRADO/modulos/autocarga.py POPIS_5_0_COMPLETO/modulos/autocarga.py
+          cp POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py POPIS_5_0_COMPLETO/modulos/mapa_espacial.py
+          touch POPIS_5_0_COMPLETO/modulos/__init__.py
+
+      - name: Compile Python
+        run: |
+          python -m py_compile POPIS_5_0_COMPLETO/app.py
+          python -m py_compile POPIS_5_0_COMPLETO/launcher.py
+          python -m py_compile POPIS_5_0_COMPLETO/INSTALAR_POPIS.py
+          python -m py_compile POPIS_5_0_COMPLETO/diagnostico.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/autocarga.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/mapa_espacial.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/centroides.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/mapa_centroides.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/motor_epidemiologico.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/motor_suive.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/indicadores_eda.py
+          python -m py_compile POPIS_5_0_COMPLETO/modulos/exportacion.py
+
+      - name: Synthetic functional test
+        env:
+          PYTHONPATH: POPIS_5_0_COMPLETO
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import tempfile
+          import pandas as pd
+
+          from modulos.centroides import CENTROIDES_SONORA, resolve_centroid
+          from modulos.mapa_centroides import prepare_map_dataframe, build_incidence_table
+          from modulos.motor_epidemiologico import normalize_sinave, weekly_counts, endemic_channel, pathogen_table, mortality_by_year
+          from modulos.motor_suive import read_suive, compare_sinave_suive
+          from modulos.indicadores_eda import calculate_indicators
+          from modulos.exportacion import graphics_zip, excel_report
+
+          assert len(CENTROIDES_SONORA) >= 70
+          lat, lon, src = resolve_centroid('Hermosillo')
+          assert 28 < lat < 30 and -112 < lon < -110
+
+          raw = pd.DataFrame([
+              {'Fec_captura':'20/07/2026','Fecha_Inicio':'18/07/2026','SemanaInicio':'28','Folio':'A','Mun_Res':'HERMOSILLO','Shigella':'Positivo','Latitud':'28.0','Longitud':'-109.0','Fec_Primer_Contacto':'19/07/2026'},
+              {'Fec_captura':'20/07/2026','Fecha_Inicio':'18/07/2026','SemanaInicio':'28','Folio':'B','Mun_Res':'CAJEME','Salmonella':'Positivo','FecDefuncion':'22/07/2026','Fec_Primer_Contacto':'20/07/2026'},
+              {'Fec_captura':'27/07/2026','Fecha_Inicio':'25/07/2026','SemanaInicio':'29','Folio':'C','Mun_Res':'NOGALES','Fec_Primer_Contacto':'26/07/2026'},
+          ])
+          base = normalize_sinave(raw, 'synthetic.xls')
+          assert len(base) == 3
+          assert int(base['Shigella'].sum()) == 1
+          assert int(base['Salmonella'].sum()) == 1
+
+          # Centroides son el modo por defecto aun cuando existe latitud/longitud exacta.
+          centroid = prepare_map_dataframe(base, use_exact=False)
+          exact = prepare_map_dataframe(base, use_exact=True)
+          first_c = centroid.iloc[0]
+          first_e = exact.iloc[0]
+          assert abs(float(first_c['__lat_mapa']) - 29.0729) < 0.1
+          assert abs(float(first_e['__lat_mapa']) - 28.0) < 0.001
+
+          pop = pd.DataFrame({'Municipio':['HERMOSILLO','CAJEME','NOGALES'],'Poblacion':[1000000,450000,280000]})
+          inc = build_incidence_table(base, pop, 100000)
+          assert int(inc['Casos'].sum()) == 3
+
+          weekly = weekly_counts(base)
+          channel = endemic_channel(weekly, [2026], 2026)
+          assert len(channel) == 53
+          mortality = mortality_by_year(base, 29)
+          assert int(mortality['Defunciones registradas'].sum()) == 1
+          paths = pathogen_table(base)
+          assert int(paths['Detecciones'].sum()) == 2
+          indicators = calculate_indicators(base)
+          assert not indicators.empty
+
+          # SUIVE: formato años en filas, semanas en columnas.
+          with tempfile.TemporaryDirectory() as tmp:
+              p = Path(tmp) / 'suive.xlsx'
+              data = [['Año'] + list(range(1,54)), [2024] + [100+i for i in range(53)], [2025] + [110+i for i in range(53)], [2026] + [120+i for i in range(53)]]
+              pd.DataFrame(data).to_excel(p, index=False, header=False, sheet_name='SUIVE')
+              suive = read_suive(p)
+              assert len(suive) >= 150
+              comp = compare_sinave_suive(weekly, suive, 2026, 29)
+              assert len(comp) == 29
+
+          report = excel_report({'Resumen': pd.DataFrame([{'ok':1}]), 'Indicadores': indicators})
+          assert len(report) > 3000
+          gz = graphics_zip(weekly, pd.DataFrame({'Año':[2026],'Casos acumulados ≤ SE29':[3]}), paths, mortality, 29)
+          assert len(gz) > 5000
+          print('POPIS 5.0 functional tests: OK')
+          PY
+
+      - name: Assemble complete distribution
+        run: |
+          rm -rf build_popis50
+          mkdir -p build_popis50/POPIS_5_0_COMPLETO/modulos
+          cp -R POPIS_5_0_COMPLETO/. build_popis50/POPIS_5_0_COMPLETO/
+          cp POPIS_4_7_INTEGRADO/modulos/autocarga.py build_popis50/POPIS_5_0_COMPLETO/modulos/autocarga.py
+          cp POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py build_popis50/POPIS_5_0_COMPLETO/modulos/mapa_espacial.py
+          touch build_popis50/POPIS_5_0_COMPLETO/modulos/__init__.py
+          mkdir -p build_popis50/POPIS_5_0_COMPLETO/data/{historicos,actual,entrada,backups,suive,poblacion,geografia,coordenadas}
+          mkdir -p build_popis50/POPIS_5_0_COMPLETO/salidas
+          printf 'Coloca aqui nuevas fuentes. POPIS las reconoce al iniciar.\n' > build_popis50/POPIS_5_0_COMPLETO/data/entrada/LEEME.txt
+          find build_popis50 -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find build_popis50 -type f -name '*.pyc' -delete
+
+      - name: Upload complete installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: POPIS_5_0_TODO_EN_UNO_CENTROIDES
+          path: build_popis50/POPIS_5_0_COMPLETO
+          if-no-files-found: error
+          retention-days: 30
