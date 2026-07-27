@@ -1,11 +1,11 @@
-"""POPIS 4.6.0: Cubo SUIVE automático vía Microsoft Excel + lector multiformato."""
+"""POPIS 4.6.1: Cubo SUIVE automático + corrección espacial de domicilios numéricos."""
 from pathlib import Path
 
 _original_read_text = Path.read_text
 
 
 def _patch_v45(text: str) -> str:
-    text = text.replace("4.4.0-reports", "4.6.0-auto-suive")
+    text = text.replace("4.4.0-reports", "4.6.1-spatialfix")
     text = text.replace(
         'new_suive=st.file_uploader("Nuevo SUIVE actual",type=["xls","xlsx"],key="weekly_suive")',
         'new_suive=st.file_uploader("Cubo / SUIVE actual",type=["xls","xlsx","xlsm"],key="weekly_suive")'
@@ -22,7 +22,6 @@ def _patch_v45(text: str) -> str:
     if old in text:
         text = text.replace(old, new)
 
-    # Inyectar automatización Excel justo al final del bloque semanal SUIVE.
     marker = '''                    st.success("SUIVE actualizado y validado"); st.cache_data.clear(); st.rerun()'''
     auto = '''                    st.success("SUIVE actualizado y validado"); st.cache_data.clear(); st.rerun()
 
