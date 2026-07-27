@@ -1,4 +1,4 @@
-name: POPIS 4.6.1 CI
+name: POPIS 4.6.2 CI
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ jobs:
         run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0" "matplotlib>=3.8,<4" "python-docx>=1.1,<2" "Pillow>=10,<13" requests
       - name: Compile Python
         working-directory: POPIS_4_0
-        run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_v45.py app_v46.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_suive_cube.py popis_excel_refresh.py popis_case_population_fix.py popis_spatial.py popis_reports.py
+        run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_v45.py app_v46.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_suive_cube.py popis_excel_refresh.py popis_case_population_fix.py popis_spatial.py popis_spatial_compat.py popis_reports.py pages/6_Focos_Espaciales.py
       - name: Test active build wiring
         working-directory: POPIS_4_0
         shell: pwsh
@@ -29,9 +29,9 @@ jobs:
           b=Path('app_bootstrap.py').read_text(encoding='utf-8')
           a=Path('app_v46.py').read_text(encoding='utf-8')
           bat=Path('INICIAR_POPIS.bat').read_text(encoding='utf-8')
-          assert '4.6.1-spatialfix' in b and 'app_v46.py' in b
-          assert '4.6.1-spatialfix' in a
-          assert '4.6.1-spatialfix' in bat
+          assert '4.6.2-spatialapi' in b and 'app_v46.py' in b
+          assert '4.6.2-spatialapi' in a
+          assert '4.6.2-spatialapi' in bat
           assert 'Actualizar SUIVE desde Excel' in a
           print('BUILD WIRING OK')
           '@ | Set-Content -Encoding utf8 test_build.py
@@ -68,6 +68,44 @@ jobs:
           print('SPATIAL ADDRESS NORMALIZATION OK')
           '@ | Set-Content -Encoding utf8 test_spatial_address.py
           python test_spatial_address.py
+      - name: Test Focos Espaciales API contract
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import ast
+          from pathlib import Path
+          import pandas as pd
+          import popis_spatial_compat as api
+
+          required=['address_table','coverage','detect_clusters','grid_concentration','pending_geocoding_export','save_exact_geocodes','spatial_subset']
+          for name in required:
+              assert hasattr(api,name), name
+
+          tree=ast.parse(Path('pages/6_Focos_Espaciales.py').read_text(encoding='utf-8'))
+          spatial_imports=[]
+          for node in ast.walk(tree):
+              if isinstance(node,ast.ImportFrom) and node.module=='popis_spatial_compat':
+                  spatial_imports.extend(alias.name for alias in node.names)
+          assert set(required).issubset(spatial_imports)
+
+          pts=pd.DataFrame({
+              'Folio':['A','B','C','D'],
+              'Latitud':[29.0800,29.0805,29.0810,30.0],
+              'Longitud':[-110.9600,-110.9605,-110.9610,-111.0],
+              'Precisión':['Exacta SINAVE']*4,
+              'onset_date':pd.to_datetime(['2026-07-20','2026-07-21','2026-07-22','2026-07-22']),
+              'Municipio':['Hermosillo']*4,
+              'Distrito':['01 Hermosillo']*4,
+          })
+          cov=api.coverage(pts); assert int(cov['Casos'].sum())==4
+          cp,clusters=api.detect_clusters(pts,1.0,3,7,True)
+          assert not clusters.empty and int(clusters.iloc[0]['Casos'])==3
+          assert {'Latitud centro','Longitud centro','Señal','Municipio','Distrito'}.issubset(clusters.columns)
+          grid=api.grid_concentration(pts,0.5); assert not grid.empty and int(grid['Casos'].sum())==4
+          print('FOCOS ESPACIALES API OK')
+          '@ | Set-Content -Encoding utf8 test_spatial_api.py
+          python test_spatial_api.py
       - name: Test SUIVE cube layouts
         working-directory: POPIS_4_0
         shell: pwsh
@@ -201,10 +239,10 @@ jobs:
           python test_reports.py
       - name: Package POPIS
         shell: pwsh
-        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_6_1_WINDOWS.zip -Force
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_6_2_WINDOWS.zip -Force
       - name: Upload POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_6_1_WINDOWS
-          path: POPIS_4_6_1_WINDOWS.zip
+          name: POPIS_4_6_2_WINDOWS
+          path: POPIS_4_6_2_WINDOWS.zip
           retention-days: 30
