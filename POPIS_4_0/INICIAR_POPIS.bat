@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-title POPIS 4.6.1 - SUIVE AUTOMATICO + ESPACIAL
+title POPIS 4.6.2 - SUIVE AUTOMATICO + ESPACIAL
 set "VENV=%LOCALAPPDATA%\POPIS4\venv"
 set "PY=%VENV%\Scripts\python.exe"
 set "STATE=%LOCALAPPDATA%\POPIS4"
@@ -14,7 +14,7 @@ set "PORTFILE=%STATE%\POPIS.port"
 if not exist "%STATE%" mkdir "%STATE%"
 
 echo ===============================================================
-echo  POPIS 4.6.1 - SUIVE AUTOMATICO + ESPACIAL CORREGIDO
+echo  POPIS 4.6.2 - SUIVE AUTOMATICO + API ESPACIAL CORREGIDA
 echo  Cubo + Refresh All + mapas + reportes Excel / Word
 echo ===============================================================
 echo.
@@ -45,15 +45,15 @@ echo [2/7] Verificando dependencias...
 if errorlevel 1 goto :install_error
 
 echo [3/7] Verificando motor POPIS, cubo SUIVE, espacial y reportes...
-"%PY%" -c "import streamlit,pandas,openpyxl,docx,PIL; import popis_core,popis_data,popis_runtime,popis_reports,popis_suive_cube,popis_excel_refresh,popis_spatial; print('Motor POPIS 4.6.1 OK')"
+"%PY%" -c "import streamlit,pandas,openpyxl,docx,PIL; import popis_core,popis_data,popis_runtime,popis_reports,popis_suive_cube,popis_excel_refresh,popis_spatial,popis_spatial_compat; from popis_spatial_compat import coverage,detect_clusters,grid_concentration,spatial_subset; print('Motor POPIS 4.6.2 OK')"
 if errorlevel 1 goto :install_error
 
-echo [4/7] Verificando interfaz POPIS 4.6.1...
+echo [4/7] Verificando interfaz POPIS 4.6.2...
 if not exist "app_bootstrap.py" goto :app_error
 if not exist "app_v46.py" goto :app_error
-findstr /c:"4.6.1-spatialfix" "app_v46.py" >nul
+findstr /c:"4.6.2-spatialapi" "app_v46.py" >nul
 if errorlevel 1 goto :version_error
-echo       Interfaz 4.6.1-spatialfix localizada.
+echo       Interfaz 4.6.2-spatialapi localizada.
 
 echo [5/7] Seleccionando puerto libre...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$l=New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback,0); $l.Start(); $p=$l.LocalEndpoint.Port; $l.Stop(); Set-Content -LiteralPath '%PORTFILE%' -Value $p"
@@ -63,7 +63,7 @@ set /p PORT=<"%PORTFILE%"
 if not defined PORT goto :port_error
 echo       Puerto nuevo: !PORT!
 
-echo [6/7] Iniciando servidor POPIS 4.6.1...
+echo [6/7] Iniciando servidor POPIS 4.6.2...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$args=@('-m','streamlit','run','app_bootstrap.py','--server.address','127.0.0.1','--server.port','!PORT!','--browser.gatherUsageStats','false'); $p=Start-Process -FilePath '%PY%' -ArgumentList $args -WorkingDirectory '%CD%' -RedirectStandardOutput '%LOGOUT%' -RedirectStandardError '%LOGERR%' -PassThru; Set-Content -LiteralPath '%PIDFILE%' -Value $p.Id"
 if errorlevel 1 goto :server_error
 
@@ -73,11 +73,11 @@ if errorlevel 1 goto :health_error
 
 echo.
 echo ===============================================================
-echo  POPIS 4.6.1 ESTA ACTIVO
+echo  POPIS 4.6.2 ESTA ACTIVO
 echo  http://127.0.0.1:!PORT!
 echo.
 echo  EN LA BARRA LATERAL DEBE DECIR:
-echo  POPIS 4.6.1-spatialfix
+echo  POPIS 4.6.2-spatialapi
 echo ===============================================================
 echo.
 powershell.exe -NoProfile -Command "Start-Process 'http://127.0.0.1:!PORT!'"
@@ -116,7 +116,7 @@ pause
 exit /b 1
 
 :version_error
-echo ERROR: app_v46.py no corresponde a POPIS 4.6.1-spatialfix.
+echo ERROR: app_v46.py no corresponde a POPIS 4.6.2-spatialapi.
 echo Reemplaza los archivos del programa con el ZIP completo mas reciente.
 pause
 exit /b 1
