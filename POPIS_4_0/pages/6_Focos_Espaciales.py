@@ -9,12 +9,12 @@ activate()
 
 from popis_core_patch import DISTRICTS, canonical_municipality
 from popis_data import load_preloaded_sources
-from popis_spatial import (
+from popis_spatial_compat import (
     address_table, coverage, detect_clusters, grid_concentration,
     pending_geocoding_export, save_exact_geocodes, spatial_subset,
 )
 
-st.set_page_config(page_title="POPIS 4.3 · Focos espaciales", page_icon="🔥", layout="wide")
+st.set_page_config(page_title="POPIS 4.6.2 · Focos espaciales", page_icon="🔥", layout="wide")
 st.title("🔥 Focos espaciales y detección de conglomerados")
 st.caption("Dirección/localidad → municipio → Distrito de Salud. Los domicilios nominales permanecen en la computadora local.")
 
@@ -158,4 +158,4 @@ if not grid.empty:
     st.download_button("⬇️ Descargar concentración por celdas",grid.to_csv(index=False).encode("utf-8-sig"),file_name=f"POPIS_celdas_{cell}km_{year}.csv",mime="text/csv")
 
 st.divider()
-st.caption("POPIS 4.3 · análisis espacial local. Los mapas compartidos deben evitar mostrar domicilios o identificadores personales.")
+st.caption("POPIS 4.6.2 · análisis espacial local. Los mapas compartidos deben evitar mostrar domicilios o identificadores personales.")
