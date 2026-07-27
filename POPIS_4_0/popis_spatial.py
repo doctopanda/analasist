@@ -1,4 +1,4 @@
-"""Motor espacial POPIS 4.3.
+"""Motor espacial POPIS 4.6.1.
 
 Principios:
 - Los datos nominales permanecen locales.
@@ -30,8 +30,41 @@ GEOCODE_FILE = GEO_DIR / "geocodificados.csv"
 INEGI_DIR = GEO_DIR / "inegi"
 
 
+def _is_missing(value: object) -> bool:
+    """True para None/NaN/pd.NA/NaT sin romper con tipos escalares diversos."""
+    if value is None:
+        return True
+    try:
+        result = pd.isna(value)
+        return bool(result) if np.isscalar(result) else False
+    except Exception:
+        return False
+
+
+def _safe_text(value: object, numeric_identifier: bool = False) -> str:
+    """Convierte de forma segura una celda de domicilio a texto.
+
+    Excel suele convertir números exteriores y CP a float (123 -> 123.0). Para
+    identificadores numéricos se elimina únicamente el .0 artificial.
+    """
+    if _is_missing(value):
+        return ""
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(float(value)):
+            return ""
+        return str(int(value)) if float(value).is_integer() else str(value).strip()
+    text = str(value).strip()
+    if text.upper() in {"NAN", "NONE", "<NA>", "NAT", "NULL"}:
+        return ""
+    if numeric_identifier and re.fullmatch(r"[+-]?\d+\.0+", text):
+        return text.split(".", 1)[0]
+    return text
+
+
 def _norm(value: object) -> str:
-    text = "" if value is None or (isinstance(value, float) and math.isnan(value)) else str(value)
+    text = _safe_text(value)
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"\s+", " ", text.strip()).upper()
 
@@ -54,27 +87,40 @@ def _series(df: pd.DataFrame, *names: str) -> pd.Series:
     return df[c] if c else pd.Series("", index=df.index, dtype="object")
 
 
+def _text_series(df: pd.DataFrame, *names: str, numeric_identifier: bool = False) -> pd.Series:
+    return _series(df, *names).map(lambda v: _safe_text(v, numeric_identifier=numeric_identifier))
+
+
 def address_table(df: pd.DataFrame) -> pd.DataFrame:
     """Extrae campos geográficos sin incluir nombre, CURP, teléfono u otros identificadores."""
     if df is None or df.empty:
         return pd.DataFrame()
     out = pd.DataFrame(index=df.index)
-    out["Folio"] = _series(df, "folio", "Folio").astype(str).str.strip()
-    out["Calle"] = _series(df, "Calle").astype(str).str.strip()
-    out["Num exterior"] = _series(df, "Num_Exterior", "Num Exterior").astype(str).str.strip()
-    out["Num interior"] = _series(df, "Num_Interior", "Num Interior").astype(str).str.strip()
-    out["Colonia"] = _series(df, "Colonia").astype(str).str.strip()
-    out["CP"] = _series(df, "CP", "Codigo Postal", "Código Postal").astype(str).str.strip()
-    out["Localidad"] = _series(df, "Loc_Res", "Localidad_Residencia", "locality").astype(str).str.strip()
+    out["Folio"] = _text_series(df, "folio", "Folio", numeric_identifier=True)
+    out["Calle"] = _text_series(df, "Calle")
+    out["Num exterior"] = _text_series(df, "Num_Exterior", "Num Exterior", numeric_identifier=True)
+    out["Num interior"] = _text_series(df, "Num_Interior", "Num Interior", numeric_identifier=True)
+    out["Colonia"] = _text_series(df, "Colonia")
+    out["CP"] = _text_series(df, "CP", "Codigo Postal", "Código Postal", numeric_identifier=True)
+    out["Localidad"] = _text_series(df, "Loc_Res", "Localidad_Residencia", "locality")
     mun = _series(df, "municipality", "Mun_Res", "Municipio_Residencia", "Municipio")
-    out["Municipio"] = mun.map(canonical_municipality)
-    out["Estado"] = _series(df, "state_residence", "Edo_Res", "Ent_Res", "Entidad").astype(str).str.strip()
-    out["Entre calle"] = _series(df, "Entre_Calle").astype(str).str.strip()
-    out["Y calle"] = _series(df, "Y_Calle").astype(str).str.strip()
+    out["Municipio"] = mun.map(lambda v: _safe_text(canonical_municipality(v)))
+    out["Estado"] = _text_series(df, "state_residence", "Edo_Res", "Ent_Res", "Entidad")
+    out["Entre calle"] = _text_series(df, "Entre_Calle")
+    out["Y calle"] = _text_series(df, "Y_Calle")
 
     def full_address(r):
-        street = " ".join(x for x in [r["Calle"], r["Num exterior"]] if x and x.lower() != "nan")
-        return ", ".join(x for x in [street, r["Colonia"], r["Localidad"], r["Municipio"], "Sonora", r["CP"]] if x and str(x).lower() != "nan")
+        street_parts = [_safe_text(r.get("Calle")), _safe_text(r.get("Num exterior"), numeric_identifier=True)]
+        street = " ".join(x for x in street_parts if x)
+        parts = [
+            street,
+            _safe_text(r.get("Colonia")),
+            _safe_text(r.get("Localidad")),
+            _safe_text(r.get("Municipio")),
+            "Sonora",
+            _safe_text(r.get("CP"), numeric_identifier=True),
+        ]
+        return ", ".join(x for x in parts if x)
 
     out["Domicilio normalizado"] = out.apply(full_address, axis=1)
     out["address_key"] = out["Domicilio normalizado"].map(lambda x: sha256(_norm(x).encode("utf-8")).hexdigest()[:24] if _norm(x) else "")
@@ -129,11 +175,11 @@ def save_exact_geocodes(uploaded) -> Path:
     if not lat or not lon or (not fcol and not acol):
         raise ValueError("El archivo debe incluir Latitud, Longitud y Folio o address_key.")
     out = pd.DataFrame({
-        "Folio": df[fcol].astype(str).str.strip() if fcol else "",
-        "address_key": df[acol].astype(str).str.strip() if acol else "",
+        "Folio": df[fcol].map(lambda v: _safe_text(v, numeric_identifier=True)) if fcol else "",
+        "address_key": df[acol].map(_safe_text) if acol else "",
         "Latitud": pd.to_numeric(df[lat], errors="coerce"),
         "Longitud": pd.to_numeric(df[lon], errors="coerce"),
-        "Precisión": df[_col(df, "Precisión", "Precision")].astype(str) if _col(df, "Precisión", "Precision") else "Exacta institucional",
+        "Precisión": df[_col(df, "Precisión", "Precision")].map(_safe_text) if _col(df, "Precisión", "Precision") else "Exacta institucional",
     }).dropna(subset=["Latitud", "Longitud"])
     old = load_exact_geocodes()
     all_rows = pd.concat([old, out], ignore_index=True)
@@ -227,86 +273,49 @@ def add_approximate_coordinates(df: pd.DataFrame) -> pd.DataFrame:
 
 def merge_coordinates(df: pd.DataFrame, use_inegi_fallback: bool = True) -> pd.DataFrame:
     a = add_approximate_coordinates(df) if use_inegi_fallback else address_table(df).assign(Latitud=np.nan,Longitud=np.nan,Precisión="Sin coordenada")
-    # Coordenadas ya presentes en la base, si aparecen en futuras exportaciones.
     lat_raw = _col(df, "Latitud", "Latitude", "LAT")
     lon_raw = _col(df, "Longitud", "Longitude", "LON", "LNG")
     if lat_raw and lon_raw:
-        latv=pd.to_numeric(df[lat_raw],errors="coerce"); lonv=pd.to_numeric(df[lon_raw],errors="coerce"); ok=latv.notna()&lonv.notna(); a.loc[ok,"Latitud"]=latv[ok]; a.loc[ok,"Longitud"]=lonv[ok]; a.loc[ok,"Precisión"]="Exacta en SINAVE"
-    exact = load_exact_geocodes()
+        latv=pd.to_numeric(df[lat_raw],errors="coerce"); lonv=pd.to_numeric(df[lon_raw],errors="coerce"); ok=latv.notna()&lonv.notna(); a.loc[ok,"Latitud"]=latv[ok]; a.loc[ok,"Longitud"]=lonv[ok]; a.loc[ok,"Precisión"]="Exacta SINAVE"
+    exact=load_exact_geocodes()
     if not exact.empty:
-        by_f = exact[exact["Folio"].astype(str).str.strip().ne("")].drop_duplicates("Folio",keep="last").set_index("Folio")
-        by_a = exact[exact["address_key"].astype(str).str.strip().ne("")].drop_duplicates("address_key",keep="last").set_index("address_key")
+        by_f={str(r.Folio):r for _,r in exact.iterrows() if str(r.Folio).strip() and str(r.Folio).lower()!="nan"}; by_a={str(r.address_key):r for _,r in exact.iterrows() if str(r.address_key).strip() and str(r.address_key).lower()!="nan"}
         for idx,r in a.iterrows():
-            match = None
-            if r["Folio"] in by_f.index: match=by_f.loc[r["Folio"]]
-            elif r["address_key"] in by_a.index: match=by_a.loc[r["address_key"]]
-            if match is not None:
-                a.at[idx,"Latitud"]=float(match["Latitud"]); a.at[idx,"Longitud"]=float(match["Longitud"]); a.at[idx,"Precisión"]=str(match.get("Precisión","Exacta institucional"))
-    a["Distrito"] = a["Municipio"].map(district_for_municipality)
+            hit=by_f.get(str(r["Folio"])) or by_a.get(str(r["address_key"]))
+            if hit is not None: a.at[idx,"Latitud"]=float(hit.Latitud); a.at[idx,"Longitud"]=float(hit.Longitud); a.at[idx,"Precisión"]=getattr(hit,"Precisión","Exacta institucional")
     return a
 
 
-def spatial_subset(sinave: pd.DataFrame, year: int, week_start: int, week_end: int, district: str="Todos", municipality: str="Todos", pathogen: str="Todos los casos") -> pd.DataFrame:
-    ycol = "epi_year" if "epi_year" in sinave.columns else "year"
-    mask = pd.to_numeric(sinave[ycol],errors="coerce").eq(year) & pd.to_numeric(sinave["epi_week"],errors="coerce").between(week_start,week_end)
-    x=sinave[mask].copy()
-    if pathogen != "Todos los casos":
-        col=f"path_{pathogen}"; x=x[x[col].fillna(False)] if col in x else x.iloc[0:0]
-    geo=merge_coordinates(x,True)
-    geo["_row_index"] = x.index
-    if district!="Todos": geo=geo[geo["Distrito"].eq(district)]
-    if municipality!="Todos": geo=geo[geo["Municipio"].map(canonical_municipality).eq(canonical_municipality(municipality))]
-    onset = x.loc[geo["_row_index"],"onset_date"] if "onset_date" in x else pd.Series(pd.NaT,index=geo.index)
-    geo["Fecha inicio"] = pd.to_datetime(onset.values,errors="coerce")
-    return geo.dropna(subset=["Latitud","Longitud"]).reset_index(drop=True)
-
-
-def coverage(points: pd.DataFrame) -> pd.DataFrame:
-    if points is None or points.empty: return pd.DataFrame(columns=["Precisión","Casos"])
-    return points.groupby("Precisión",as_index=False).size().rename(columns={"size":"Casos"}).sort_values("Casos",ascending=False)
-
-
 def haversine_km(lat1,lon1,lat2,lon2):
-    R=6371.0088
-    p1,p2=math.radians(lat1),math.radians(lat2); dp=math.radians(lat2-lat1); dl=math.radians(lon2-lon1)
-    a=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
-    return 2*R*math.asin(math.sqrt(a))
+    R=6371.0088; p1,p2=math.radians(lat1),math.radians(lat2); dp=math.radians(lat2-lat1); dl=math.radians(lon2-lon1); q=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2; return 2*R*math.asin(math.sqrt(q))
 
 
-def detect_clusters(points: pd.DataFrame, radius_km: float=1.0, min_cases: int=3, max_days: int=7, exact_only: bool=True) -> tuple[pd.DataFrame,pd.DataFrame]:
-    if points is None or points.empty: return pd.DataFrame(),pd.DataFrame()
-    p=points.copy()
-    if exact_only: p=p[p["Precisión"].str.startswith("Exacta",na=False)].copy()
-    p=p.dropna(subset=["Latitud","Longitud","Fecha inicio"]).reset_index(drop=True)
-    n=len(p)
-    if n==0: return p,pd.DataFrame()
-    parent=list(range(n))
-    def find(a):
-        while parent[a]!=a: parent[a]=parent[parent[a]]; a=parent[a]
-        return a
-    def union(a,b):
-        ra,rb=find(a),find(b)
-        if ra!=rb: parent[rb]=ra
-    dates=pd.to_datetime(p["Fecha inicio"])
-    for i in range(n):
-        for j in range(i+1,n):
-            if abs((dates.iloc[i]-dates.iloc[j]).days)>max_days: continue
-            if haversine_km(float(p.at[i,"Latitud"]),float(p.at[i,"Longitud"]),float(p.at[j,"Latitud"]),float(p.at[j,"Longitud"]))<=radius_km: union(i,j)
-    groups={}
-    for i in range(n): groups.setdefault(find(i),[]).append(i)
-    groups=[g for g in groups.values() if len(g)>=min_cases]
-    rows=[]
-    p["Cluster"]=""
-    for k,g in enumerate(sorted(groups,key=len,reverse=True),1):
-        label=f"C{k:02d}"; p.loc[g,"Cluster"]=label; q=p.loc[g]
-        rows.append({"Cluster":label,"Casos":len(q),"Inicio":q["Fecha inicio"].min(),"Fin":q["Fecha inicio"].max(),"Días":int((q["Fecha inicio"].max()-q["Fecha inicio"].min()).days)+1,"Distrito":q["Distrito"].mode().iloc[0] if not q["Distrito"].mode().empty else "","Municipio":q["Municipio"].mode().iloc[0] if not q["Municipio"].mode().empty else "","Latitud centro":q["Latitud"].mean(),"Longitud centro":q["Longitud"].mean(),"Señal":"Alta" if len(q)>=10 else "Alerta" if len(q)>=5 else "Vigilar"})
-    return p[p["Cluster"].ne("")].copy(),pd.DataFrame(rows)
-
-
-def grid_concentration(points: pd.DataFrame, cell_km: float=0.5) -> pd.DataFrame:
+def spatial_clusters(points: pd.DataFrame, radius_km: float=1.0, min_cases: int=3, days: int=7) -> pd.DataFrame:
     if points is None or points.empty: return pd.DataFrame()
-    p=points.dropna(subset=["Latitud","Longitud"]).copy(); lat0=float(p["Latitud"].mean()); cos0=max(math.cos(math.radians(lat0)),0.1)
-    p["_x"] = p["Longitud"]*111.320*cos0; p["_y"] = p["Latitud"]*110.574
-    p["Celda X"] = np.floor(p["_x"]/cell_km).astype(int); p["Celda Y"] = np.floor(p["_y"]/cell_km).astype(int)
-    g=p.groupby(["Celda X","Celda Y"],as_index=False).agg(Casos=("Folio","size"),Latitud=("Latitud","mean"),Longitud=("Longitud","mean"),Distrito=("Distrito",lambda x:x.mode().iloc[0] if not x.mode().empty else ""),Municipio=("Municipio",lambda x:x.mode().iloc[0] if not x.mode().empty else ""))
-    return g.sort_values("Casos",ascending=False,ignore_index=True)
+    x=points.dropna(subset=["Latitud","Longitud"]).copy(); x["Fecha"]=pd.to_datetime(x.get("onset_date"),errors="coerce",dayfirst=True)
+    if x.empty: return pd.DataFrame()
+    idx=list(x.index); adj={i:set() for i in idx}
+    for a_i,i in enumerate(idx):
+        for j in idx[a_i+1:]:
+            if x.at[i,"Fecha"] is not pd.NaT and x.at[j,"Fecha"] is not pd.NaT and pd.notna(x.at[i,"Fecha"]) and pd.notna(x.at[j,"Fecha"]):
+                if abs((x.at[i,"Fecha"]-x.at[j,"Fecha"]).days)>days: continue
+            if haversine_km(float(x.at[i,"Latitud"]),float(x.at[i,"Longitud"]),float(x.at[j,"Latitud"]),float(x.at[j,"Longitud"]))<=radius_km: adj[i].add(j); adj[j].add(i)
+    seen=set(); rows=[]; cid=0
+    for i in idx:
+        if i in seen: continue
+        stack=[i]; comp=[]
+        while stack:
+            q=stack.pop()
+            if q in seen: continue
+            seen.add(q); comp.append(q); stack.extend(adj[q]-seen)
+        if len(comp)<min_cases: continue
+        cid+=1; sub=x.loc[comp]; dates=sub["Fecha"].dropna();
+        rows.append({"Cluster":f"C{cid:02d}","Casos":len(sub),"Inicio":dates.min() if len(dates) else pd.NaT,"Fin":dates.max() if len(dates) else pd.NaT,"Latitud":sub["Latitud"].mean(),"Longitud":sub["Longitud"].mean(),"Radio usado km":radius_km})
+    return pd.DataFrame(rows).sort_values("Casos",ascending=False) if rows else pd.DataFrame()
+
+
+def grid_counts(points: pd.DataFrame, cell_km: float=1.0) -> pd.DataFrame:
+    if points is None or points.empty: return pd.DataFrame()
+    x=points.dropna(subset=["Latitud","Longitud"]).copy()
+    if x.empty: return pd.DataFrame()
+    lat0=float(x["Latitud"].mean()); dy=cell_km/111.32; dx=cell_km/(111.32*max(math.cos(math.radians(lat0)),.01)); x["gy"]=np.floor(x["Latitud"]/dy).astype(int); x["gx"]=np.floor(x["Longitud"]/dx).astype(int); return x.groupby(["gx","gy"],as_index=False).agg(Casos=("Folio","size"),Latitud=("Latitud","mean"),Longitud=("Longitud","mean")).sort_values("Casos",ascending=False)
