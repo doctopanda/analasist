@@ -1,0 +1,95 @@
+name: Test POPIS 4.6.3 Mapa Exacto
+
+on:
+  push:
+    branches:
+      - popis-4.6.3-mapa-exacto
+    paths:
+      - 'POPIS_4_6_3_MAPA_EXACTO/**'
+      - '.github/workflows/test-popis-4-6-3.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: POPIS_4_6_3_MAPA_EXACTO/requirements_mapa.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r POPIS_4_6_3_MAPA_EXACTO/requirements_mapa.txt
+
+      - name: Compile Python
+        run: |
+          python -m py_compile POPIS_4_6_3_MAPA_EXACTO/app_mapa.py
+          python -m py_compile POPIS_4_6_3_MAPA_EXACTO/modulos/mapa_espacial.py
+
+      - name: Synthetic functional test
+        working-directory: POPIS_4_6_3_MAPA_EXACTO
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from modulos.mapa_espacial import (
+              prepare_map_points,
+              build_folium_map,
+              build_municipal_incidence_table,
+              map_to_html_bytes,
+              municipal_table_to_excel_bytes,
+          )
+
+          df = pd.DataFrame({
+              'Folio': ['A', 'B', 'C'],
+              'Mun_Res': ['HERMOSILLO', 'HERMOSILLO', 'CAJEME'],
+              'Latitud': [29.08, 29.10, 27.49],
+              'Longitud': [-110.96, -110.95, -109.94],
+              'Fuente_Coordenada': ['Exacta SINAVE', 'Centroide localidad', 'Exacta institucional'],
+              'SemanaInicio': [28, 28, 28],
+          })
+          pop = pd.DataFrame({
+              'Municipio': ['HERMOSILLO', 'CAJEME', 'NOGALES'],
+              'Poblacion': [1000000, 450000, 280000],
+          })
+
+          pts = prepare_map_points(df, 'Latitud', 'Longitud', 'Fuente_Coordenada')
+          assert len(pts) == 3
+          assert int(pts['__precision_coord'].eq('Exacta').sum()) == 2
+          assert int(pts['__precision_coord'].eq('Aproximada').sum()) == 1
+
+          m = build_folium_map(pts, view_mode='Concentración + puntos', heat_opacity=0.30)
+          html = map_to_html_bytes(m)
+          assert len(html) > 5000
+
+          table = build_municipal_incidence_table(
+              df,
+              pop,
+              municipio_col_casos='Mun_Res',
+              multiplier=100000,
+          )
+          assert set(table['Municipio']) == {'HERMOSILLO', 'CAJEME', 'NOGALES'}
+          assert int(table['Casos'].sum()) == 3
+          xlsx = municipal_table_to_excel_bytes(table)
+          assert len(xlsx) > 3000
+          print('POPIS 4.6.3 spatial tests: OK')
+          PY
+
+      - name: Build ZIP
+        run: |
+          cd POPIS_4_6_3_MAPA_EXACTO
+          zip -r ../POPIS_4_6_3_MAPA_EXACTO.zip . -x '__pycache__/*' '*.pyc'
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: POPIS_4_6_3_MAPA_EXACTO
+          path: POPIS_4_6_3_MAPA_EXACTO.zip
+          if-no-files-found: error
+          retention-days: 30
