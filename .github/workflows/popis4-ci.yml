@@ -1,0 +1,248 @@
+name: POPIS 4.6.2 CI
+
+on:
+  pull_request:
+    paths:
+      - 'POPIS_4_0/**'
+      - '.github/workflows/popis4-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-and-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install "pandas>=2.2,<4" "numpy>=1.26,<3" "openpyxl>=3.1" "xlrd>=2.0" "matplotlib>=3.8,<4" "python-docx>=1.1,<2" "Pillow>=10,<13" requests
+      - name: Compile Python
+        working-directory: POPIS_4_0
+        run: python -m py_compile app.py app_v41.py app_v42.py app_v43.py app_v44.py app_v45.py app_v46.py app_bootstrap.py popis_core.py popis_core_patch.py popis_runtime.py popis_data.py popis_population.py popis_suive_fix.py popis_suive_cube.py popis_excel_refresh.py popis_case_population_fix.py popis_spatial.py popis_spatial_compat.py popis_reports.py pages/6_Focos_Espaciales.py
+      - name: Test active build wiring
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          b=Path('app_bootstrap.py').read_text(encoding='utf-8')
+          a=Path('app_v46.py').read_text(encoding='utf-8')
+          bat=Path('INICIAR_POPIS.bat').read_text(encoding='utf-8')
+          assert '4.6.2-spatialapi' in b and 'app_v46.py' in b
+          assert '4.6.2-spatialapi' in a
+          assert '4.6.2-spatialapi' in bat
+          assert 'Actualizar SUIVE desde Excel' in a
+          print('BUILD WIRING OK')
+          '@ | Set-Content -Encoding utf8 test_build.py
+          python test_build.py
+      - name: Test spatial numeric and missing address fields
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import numpy as np
+          import pandas as pd
+          from popis_spatial import address_table,pending_geocoding_export
+          df=pd.DataFrame({
+              'Folio':[1001.0,1002,1003],
+              'Calle':['REFORMA','JUAREZ',np.nan],
+              'Num_Exterior':[123.0,np.nan,45],
+              'Num_Interior':[np.nan,2.0,pd.NA],
+              'Colonia':['CENTRO','MODELO','CENTRO'],
+              'CP':[83000.0,83100,'83200.0'],
+              'Loc_Res':['HERMOSILLO','HERMOSILLO','URES'],
+              'Mun_Res':['HERMOSILLO','HERMOSILLO','URES'],
+              'Edo_Res':['SONORA']*3,
+              'Entre_Calle':[np.nan,'A',pd.NA],
+              'Y_Calle':['B',np.nan,pd.NA],
+          })
+          a=address_table(df)
+          assert a.loc[0,'Num exterior']=='123'
+          assert a.loc[0,'CP']=='83000'
+          assert a.loc[1,'Num exterior']==''
+          assert 'REFORMA 123' in a.loc[0,'Domicilio normalizado']
+          assert '.0' not in a.loc[0,'Domicilio normalizado']
+          payload=pending_geocoding_export(df)
+          assert payload.startswith(b'\xef\xbb\xbf') and len(payload)>100
+          print('SPATIAL ADDRESS NORMALIZATION OK')
+          '@ | Set-Content -Encoding utf8 test_spatial_address.py
+          python test_spatial_address.py
+      - name: Test Focos Espaciales API contract
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import ast
+          from pathlib import Path
+          import pandas as pd
+          import popis_spatial_compat as api
+
+          required=['address_table','coverage','detect_clusters','grid_concentration','pending_geocoding_export','save_exact_geocodes','spatial_subset']
+          for name in required:
+              assert hasattr(api,name), name
+
+          tree=ast.parse(Path('pages/6_Focos_Espaciales.py').read_text(encoding='utf-8'))
+          spatial_imports=[]
+          for node in ast.walk(tree):
+              if isinstance(node,ast.ImportFrom) and node.module=='popis_spatial_compat':
+                  spatial_imports.extend(alias.name for alias in node.names)
+          assert set(required).issubset(spatial_imports)
+
+          pts=pd.DataFrame({
+              'Folio':['A','B','C','D'],
+              'Latitud':[29.0800,29.0805,29.0810,30.0],
+              'Longitud':[-110.9600,-110.9605,-110.9610,-111.0],
+              'Precisión':['Exacta SINAVE']*4,
+              'onset_date':pd.to_datetime(['2026-07-20','2026-07-21','2026-07-22','2026-07-22']),
+              'Municipio':['Hermosillo']*4,
+              'Distrito':['01 Hermosillo']*4,
+          })
+          cov=api.coverage(pts); assert int(cov['Casos'].sum())==4
+          cp,clusters=api.detect_clusters(pts,1.0,3,7,True)
+          assert not clusters.empty and int(clusters.iloc[0]['Casos'])==3
+          assert {'Latitud centro','Longitud centro','Señal','Municipio','Distrito'}.issubset(clusters.columns)
+          grid=api.grid_concentration(pts,0.5); assert not grid.empty and int(grid['Casos'].sum())==4
+          print('FOCOS ESPACIALES API OK')
+          '@ | Set-Content -Encoding utf8 test_spatial_api.py
+          python test_spatial_api.py
+      - name: Test SUIVE cube layouts
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          from io import BytesIO
+          import pandas as pd
+          from popis_suive_cube import parse_suive_auto
+          b=BytesIO()
+          long=pd.DataFrame({'Entidad':['Sonora']*8,'Año':[2025]*4+[2026]*4,'Semana':[1,2,3,4]*2,'Casos':[80,90,100,110,120,130,140,150]})
+          with pd.ExcelWriter(b,engine='openpyxl') as w: long.to_excel(w,index=False,sheet_name='Cubo SUIVE')
+          b.seek(0); x=parse_suive_auto(b,'cubo.xlsx')
+          assert x.loc[(x['Año']==2026)&(x['SE']==4),'Casos'].iloc[0]==150
+          b=BytesIO()
+          matrix=pd.DataFrame({'SE':[1,2,3,4],2024:[50,60,70,80],2025:[70,80,90,100],2026:[100,120,130,140]})
+          with pd.ExcelWriter(b,engine='openpyxl') as w: matrix.to_excel(w,index=False,sheet_name='RIO SONORA')
+          b.seek(0); y=parse_suive_auto(b,'pivote.xlsx')
+          assert y.loc[(y['Año']==2026)&(y['SE']==4),'Casos'].iloc[0]==140
+          print('CUBE LAYOUTS OK')
+          '@ | Set-Content -Encoding utf8 test_cube.py
+          python test_cube.py
+      - name: Test Excel refresh automation contract
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import tempfile
+          import popis_excel_refresh as er
+          script=er._powershell_refresh_script()
+          for token in ['Excel.Application','RefreshAll','CalculateUntilAsyncQueriesDone','PivotCaches','CalculateFullRebuild','$wb.Save()']:
+              assert token in script, token
+          with tempfile.TemporaryDirectory() as td:
+              p=Path(td)/'cube.xlsx'; p.write_bytes(b'placeholder')
+              old_dir,old_path=er.CUBE_DIR,er.PATH_FILE
+              er.CUBE_DIR=Path(td)/'store'; er.PATH_FILE=er.CUBE_DIR/'source_path.txt'
+              try:
+                  q=er.register_cube_path(p)
+                  assert er.get_cube_source()==q.resolve()
+              finally:
+                  er.CUBE_DIR,er.PATH_FILE=old_dir,old_path
+          print('EXCEL AUTOMATION CONTRACT OK')
+          '@ | Set-Content -Encoding utf8 test_excel_refresh.py
+          python test_excel_refresh.py
+      - name: Test SUIVE zero guard
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import pandas as pd
+          import popis_data as d
+          import popis_core as core
+          from popis_runtime import activate
+          activate()
+          good=pd.DataFrame({'Año':[2026]*4,'SE':[1,2,3,4],'Casos':[100,120,110,130]})
+          bad=pd.DataFrame({'Año':[2026]*4,'SE':[1,2,3,4],'Casos':[0,0,0,0]})
+          original=core.parse_suive_history
+          try:
+              core.parse_suive_history=lambda obj,name: good.copy()
+              info=d.inspect_suive_payload(b'x','x.xlsx'); assert info['accumulated']==460 and info['last_se']==4
+              core.parse_suive_history=lambda obj,name: bad.copy()
+              try: d._validate_weekly_suive(b'x','x.xlsx'); raise AssertionError('debió rechazar cero')
+              except ValueError: pass
+          finally: core.parse_suive_history=original
+          print('SUIVE GUARD OK')
+          '@ | Set-Content -Encoding utf8 test_suive_guard.py
+          python test_suive_guard.py
+      - name: Test real SINAVE edge cases
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import pandas as pd
+          import popis_core as core
+          from popis_runtime import activate
+          from popis_core_patch import canonical_municipality
+          activate()
+          df=pd.DataFrame({'Folio':['BOUNDARY','A','B','REJECT'],'Fec_captura':['05/01/2026','05/01/2026','10/01/2026','10/02/2026'],'Fecha_Inicio':['02/01/2026','04/01/2026','09/01/2026','09/02/2026'],'SemanaInicio':[53,1,2,6],'Fec_Primer_Contacto':['04/01/2026','04/01/2026','09/01/2026','09/02/2026'],'Fec_Dx_Final':['15/01/2026','06/01/2026','12/01/2026','12/02/2026'],'Diag_Final':['SALMONELOSIS','NEGATIVO','SHIGELOSIS','SIN DX MUESTRAS RECHAZADAS'],'Salmonella':['POSITIVO','NEGATIVO','NEGATIVO','NEGATIVO'],'Shigella':['NEGATIVO','NEGATIVO','POSITIVO','NEGATIVO'],'Edo_Res':['SONORA']*4,'Mun_Res':['BENITO JUAREZ   SON','ROSARIO SON','HERMOSILLO','HERMOSILLO'],'Calidad_Hiso_Vibrio':['ADECUADA','ADECUADA','ADECUADA','RECHAZO DEFINITIVO']})
+          n=core.normalize_sinave(df,'actual')
+          assert int(n.loc[n.folio.eq('BOUNDARY'),'epi_year'].iloc[0])==2025
+          assert n['sonora_resident'].all()
+          assert canonical_municipality('BENITO JUAREZ   SON')=='Benito Juárez'
+          assert core.sinave_summary(n,2026,2)['acumulado']==2
+          print('REAL EDGE CASES OK')
+          '@ | Set-Content -Encoding utf8 test_real_edges.py
+          python test_real_edges.py
+      - name: Test population age-sex engine
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import pandas as pd
+          import popis_core as core
+          from popis_runtime import activate
+          activate(); import popis_population as pp
+          popraw=pd.DataFrame({'MUN':['Hermosillo']*8,'AÑO':[2026]*8,'SEXO':['HOMBRES','MUJERES']*4,'EDAD_QUIN':['00-04','00-04','05-09','05-09','pobm_65_mm','pobm_65_mm','60-64','60-64'],'POB':[1000,950,1100,1050,600,650,500,550]})
+          pop=pp._normalize_frame(popraw,'synthetic'); assert '65+' in set(pop['Grupo edad'])
+          print('POPULATION OK')
+          '@ | Set-Content -Encoding utf8 test_population.py
+          python test_population.py
+      - name: Test territorial rate scaling and mappings
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          from popis_core_patch import _DISTRICT_BY_MUN,_REGION_BY_MUN
+          assert len(_DISTRICT_BY_MUN)==72 and len(_REGION_BY_MUN)==72
+          cases=50; pop_mun=100000; state_cases=500; state_pop=3000000
+          for base in (1000,10000,100000):
+              municipal=cases/pop_mun*base; state=state_cases/state_pop*base
+              assert abs((municipal/state)-3.0)<1e-12
+          print('TERRITORY OK')
+          '@ | Set-Content -Encoding utf8 test_territory.py
+          python test_territory.py
+      - name: Test Excel and Word reports
+        working-directory: POPIS_4_0
+        shell: pwsh
+        run: |
+          @'
+          import pandas as pd
+          import matplotlib.pyplot as plt
+          from io import BytesIO
+          from popis_reports import make_excel_report_with_images,make_word_report
+          fig,ax=plt.subplots(); ax.plot([1,2],[3,4]); b=BytesIO(); fig.savefig(b,format='png'); plt.close(fig)
+          tables={'Tasas municipal':pd.DataFrame({'Municipio':['A'],'Población':[1000],'Casos':[10],'Incidencia municipal /100 000':[1000.0],'Razón incidencia municipal / incidencia estatal SINAVE':[2.0]})}
+          ctx={'Año':2026,'Semana':28,'SUIVE acumulado':1000,'SINAVE acumulado':100,'SINAVE positivos':10,'Defunciones registradas':1,'Incidencia estatal SINAVE':3.2,'Base tasa':100000,'Fuentes':'prueba'}
+          x=make_excel_report_with_images(tables,{'graf.png':b.getvalue()},ctx); w=make_word_report(ctx,tables,{'graf.png':b.getvalue()})
+          assert x[:2]==b'PK' and w[:2]==b'PK' and len(x)>5000 and len(w)>5000
+          print('REPORTS OK')
+          '@ | Set-Content -Encoding utf8 test_reports.py
+          python test_reports.py
+      - name: Package POPIS
+        shell: pwsh
+        run: Compress-Archive -Path POPIS_4_0\* -DestinationPath POPIS_4_6_2_WINDOWS.zip -Force
+      - name: Upload POPIS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: POPIS_4_6_2_WINDOWS
+          path: POPIS_4_6_2_WINDOWS.zip
+          retention-days: 30
