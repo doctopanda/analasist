@@ -10,12 +10,18 @@ from modulos.autocarga import (
     save_uploaded_to_inbox,
     status_table,
 )
+from modulos.tema_caverna import aplicar_tema_caverna, cabecera_popis, nota_metodologica, titulo_seccion
 
 
-st.title("🧠 POPIS · Centro de Datos")
-st.caption("Descubrimiento, actualización y enrutamiento automático de fuentes epidemiológicas.")
-
+aplicar_tema_caverna()
 assets = discover_project_assets()
+
+corte = (
+    f"SE {assets.cutoff_week} · {assets.current_year}"
+    if assets.current_year and assets.cutoff_week
+    else "Corte automático"
+)
+cabecera_popis(corte=corte, etiqueta="DATA CENTER · ACTUALIZACIÓN AUTOMÁTICA")
 
 # La carpeta data/entrada funciona como bandeja vigilada. Solo se mueven archivos
 # reconocidos; los desconocidos permanecen intactos para revisión.
@@ -27,7 +33,8 @@ if any(action.status == "instalado" for action in actions):
         if action.status == "instalado":
             st.caption(f"✓ {action.source.name} → {action.destination}")
 
-st.markdown("### Estado de fuentes")
+
+titulo_seccion("Estado de fuentes")
 st.dataframe(status_table(assets), hide_index=True, use_container_width=True)
 
 c1, c2, c3 = st.columns(3)
@@ -38,7 +45,8 @@ with c2:
 with c3:
     st.metric("Años SINAVE disponibles", len(assets.sinave_by_year))
 
-st.markdown("### 📥 Actualizar POPIS")
+
+titulo_seccion("Actualizar POPIS")
 st.write(
     "Arrastra una nueva fuente. POPIS examina su estructura y decide si corresponde a SINAVE, "
     "SUIVE/SUAVE, población, cartografía o coordenadas. Antes de reemplazar una fuente operativa "
@@ -48,7 +56,7 @@ st.write(
 upload = st.file_uploader(
     "Nueva fuente",
     type=["xls", "xlsx", "csv", "txt", "geojson", "json"],
-    key="popis47_data_upload",
+    key="popis48_data_upload",
 )
 
 if upload is not None:
@@ -92,6 +100,11 @@ if assets.warnings:
     with st.expander("⚠️ Observaciones", expanded=False):
         for warning in assets.warnings:
             st.write(f"• {warning}")
+
+nota_metodologica(
+    "Centro de Datos conserva las fuentes epidemiológicas originales y automatiza su descubrimiento, "
+    "clasificación y actualización. Los respaldos se generan antes de sustituir una fuente operativa."
+)
 
 if st.button("🔄 Reescanear proyecto", use_container_width=True):
     st.rerun()
