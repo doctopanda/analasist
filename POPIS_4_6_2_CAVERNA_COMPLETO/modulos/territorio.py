@@ -11,7 +11,7 @@ import pandas as pd
 import requests
 from folium.plugins import HeatMap
 
-from .io_utils import find_sheet, first_existing, norm_key, read_table
+from .io_utils import first_existing, norm_key, read_table
 
 INEGI_SONORA_MUNICIPIOS = "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgem/26"
 MUNICIPALITY_CANDIDATES = ["Mun_Res", "Municipio residencia", "Municipio_Residencia", "MUNICIPIO_RESIDENCIA", "Municipio", "MUNICIPIO"]
@@ -105,9 +105,8 @@ def _read_population_source(path: Path) -> pd.DataFrame | None:
     """Lee población simple o el libro oficial municipal cuya hoja útil es `Sonora`."""
     attempts: list[str | int] = []
     if path.suffix.lower() in {".xlsx", ".xls", ".xlsm"}:
-        sonora = find_sheet(path, ["Sonora"])
-        if sonora:
-            attempts.append(sonora)
+        # Intento directo primero. Así funciona aunque README/Portada sea la hoja activa.
+        attempts.extend(["Sonora", "SONORA"])
     attempts.append(0)
 
     seen: set[str] = set()
@@ -135,9 +134,6 @@ def normalize_population(path: str | Path | None, year: int | None = None) -> pd
     1) tabla simple Municipio/Población/Año;
     2) `Sonora.ProyeccionesPoblacionMunicipales2015-2030.xlsx`, hoja `Sonora`,
        con CLAVE, CLAVE_ENT, NOM_ENT, MUN, SEXO, AÑO, EDAD_QUIN y POB.
-
-    En la estructura longitudinal se suman POB por municipio para el año solicitado,
-    conservando Hombres + Mujeres y evitando duplicar filas de total si coexistieran.
     """
     if not path:
         return None
@@ -171,7 +167,6 @@ def normalize_population(path: str | Path | None, year: int | None = None) -> pd
         if not exact.empty:
             work = exact
         else:
-            # Nunca toma otro año silenciosamente si la fuente sí tiene variable temporal.
             return None
 
     if sex_col:
@@ -205,15 +200,12 @@ def normalize_population(path: str | Path | None, year: int | None = None) -> pd
     if work.empty:
         return None
 
-    group_cols = ["__mun_key", "Municipio"]
-    result = work.groupby(group_cols, as_index=False)["Poblacion"].sum(min_count=1)
+    result = work.groupby(["__mun_key", "Municipio"], as_index=False)["Poblacion"].sum(min_count=1)
 
     if "CVE_GEO" in work.columns:
-        codes = work.groupby("__mun_key", as_index=False)["CVE_GEO"].first()
-        result = result.merge(codes, on="__mun_key", how="left")
+        result = result.merge(work.groupby("__mun_key", as_index=False)["CVE_GEO"].first(), on="__mun_key", how="left")
     if "CVE_MUN" in work.columns:
-        mun_codes = work.groupby("__mun_key", as_index=False)["CVE_MUN"].first()
-        result = result.merge(mun_codes, on="__mun_key", how="left")
+        result = result.merge(work.groupby("__mun_key", as_index=False)["CVE_MUN"].first(), on="__mun_key", how="left")
 
     return result.sort_values("Municipio").reset_index(drop=True)
 
