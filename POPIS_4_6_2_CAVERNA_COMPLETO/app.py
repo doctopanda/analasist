@@ -25,7 +25,7 @@ hero(
 
 st.sidebar.markdown("### 🧬 POPIS 4.6.2")
 st.sidebar.caption("SUIVE · SINAVE · Indicadores · Territorio")
-st.sidebar.info("Usa el menú superior de la barra lateral para abrir cada módulo. Las actualizaciones nuevas pueden colocarse en `data/entrada`. ")
+st.sidebar.info("Usa el menú superior de la barra lateral para abrir cada módulo. Las actualizaciones nuevas pueden colocarse en `data/entrada`.")
 
 for message in ctx.inbox_messages:
     st.success(message)
@@ -57,22 +57,41 @@ k5.metric("Defunciones registradas", f"{metrics['defunciones_registradas']:,}", 
 
 weekly = weekly_series(ctx.sinave)
 pathogens = pathogen_table(ctx.sinave, current_year, cutoff)
-left, right = st.columns([1.7, 1])
+left, right = st.columns([1.7, 1], gap="large")
 with left:
+    section("Tendencia semanal")
     years = sorted(pd.to_numeric(weekly["Año"], errors="coerce").dropna().astype(int).unique())
     selected_years = st.multiselect("Años a mostrar", years, default=years[-5:] if len(years) > 5 else years)
     view = weekly[weekly["Año"].isin(selected_years)] if selected_years else weekly
-    fig = px.line(view, x="Semana", y="Casos", color="Año", markers=True,
-                  color_discrete_sequence=PLOTLY_COLORS, title="Casos SINAVE por semana epidemiológica")
+    fig = px.line(
+        view,
+        x="Semana",
+        y="Casos",
+        color="Año",
+        markers=True,
+        color_discrete_sequence=PLOTLY_COLORS,
+        title="Casos SINAVE por semana epidemiológica",
+    )
+    fig.update_layout(hovermode="x unified")
+    fig.update_yaxes(rangemode="tozero")
     st.plotly_chart(style_plotly(fig), use_container_width=True)
 with right:
+    section("Patógenos acumulados")
     p = pathogens[pathogens["Detecciones"].gt(0)].sort_values("Detecciones")
     if p.empty:
         st.info("Sin detecciones positivas en el corte seleccionado.")
     else:
-        fig = px.bar(p, x="Detecciones", y="Patógeno", orientation="h",
-                     color="Patógeno", color_discrete_sequence=PLOTLY_COLORS,
-                     title=f"Patógenos acumulados ≤ SE{cutoff}")
+        fig = px.bar(
+            p,
+            x="Detecciones",
+            y="Patógeno",
+            orientation="h",
+            color="Patógeno",
+            color_discrete_sequence=PLOTLY_COLORS,
+            title=f"Detecciones acumuladas ≤ SE{cutoff}",
+        )
+        fig.update_layout(showlegend=False)
+        fig.update_yaxes(title=None)
         st.plotly_chart(style_plotly(fig), use_container_width=True)
 
 section(f"Comparación histórica al mismo corte · SE{cutoff}")
@@ -80,5 +99,5 @@ comparison = comparison_at_week(ctx.sinave, cutoff)
 st.dataframe(comparison, use_container_width=True, hide_index=True)
 
 st.caption(
-    "POPIS usa SemanaInicio como eje temporal principal de SINAVE. SUIVE/SUAVE y SINAVE son sistemas complementarios: se comparan y nunca se suman."
+    "POPIS usa SemanaInicio como eje temporal principal de SINAVE. Las semanas posteriores al último dato observado no se convierten en cero. SUIVE/SUAVE y SINAVE son sistemas complementarios: se comparan y nunca se suman."
 )
