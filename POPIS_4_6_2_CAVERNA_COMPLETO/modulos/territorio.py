@@ -36,7 +36,6 @@ def ensure_sonora_geojson(root: str | Path, timeout: int = 20) -> Path | None:
         response = requests.get(INEGI_SONORA_MUNICIPIOS, timeout=timeout)
         response.raise_for_status()
         obj = response.json()
-        # Algunas respuestas vienen envueltas en una lista o propiedad data.
         if isinstance(obj, list) and len(obj) == 1 and isinstance(obj[0], dict) and obj[0].get("type") == "FeatureCollection":
             obj = obj[0]
         if isinstance(obj, dict) and "data" in obj and isinstance(obj["data"], dict):
@@ -81,7 +80,6 @@ def municipal_centroids(geojson: dict[str, Any] | None) -> dict[str, tuple[float
             continue
         lons = np.asarray([x for x, _ in pairs], dtype=float)
         lats = np.asarray([y for _, y in pairs], dtype=float)
-        # Centro del bounding box: aproximación estable y explícitamente no domiciliaria.
         lat = float((np.nanmin(lats) + np.nanmax(lats)) / 2)
         lon = float((np.nanmin(lons) + np.nanmax(lons)) / 2)
         centers[norm_key(name)] = (lat, lon, name)
@@ -94,7 +92,6 @@ def filter_sonora_residents(base: pd.DataFrame) -> pd.DataFrame:
     mun_code = first_existing(work.columns, ["Cve_Mun_Res", "CVE_MPO_RES", "CVE_MUN_RES", "Mun_Res_Clave", "CVE_MUN"])
     if ent_col:
         ent = pd.to_numeric(work[ent_col], errors="coerce")
-        # Solo aplica filtro cuando la columna realmente contiene códigos numéricos.
         if ent.notna().any():
             work = work[ent.eq(26)].copy()
     if mun_code:
@@ -125,7 +122,6 @@ def normalize_population(path: str | Path | None, year: int | None = None) -> pd
     if pop_col:
         work["Poblacion"] = pd.to_numeric(work[pop_col].astype(str).str.replace(",", "", regex=False), errors="coerce")
     else:
-        # Formatos CONAPO anchos por sexo/grupo de edad: suma columnas pobm_/pobh_.
         age_cols = [c for c in work.columns if str(c).lower().startswith(("pobm_", "pobh_"))]
         if not age_cols:
             return None
@@ -136,8 +132,6 @@ def normalize_population(path: str | Path | None, year: int | None = None) -> pd
     work = work[work["Municipio"].ne("") & work["Poblacion"].notna()]
     if work.empty:
         return None
-    # Evita doble conteo cuando la fuente ya tiene una fila total repetida por sexo/edad:
-    # para tablas largas con muchas filas la suma es correcta; para duplicados exactos se eliminan primero.
     work = work[["__mun_key", "Municipio", "Poblacion"]].drop_duplicates()
     return work.groupby(["__mun_key", "Municipio"], as_index=False)["Poblacion"].sum()
 
@@ -166,7 +160,9 @@ def incidence_table(base: pd.DataFrame, population: pd.DataFrame | None,
         out = population.merge(counts[["__mun_key", "Casos"]], on="__mun_key", how="outer")
         out["Casos"] = out["Casos"].fillna(0).astype(int)
         out["Municipio"] = out["Municipio"].fillna(out["__mun_key"])
-    total_pop = float(out["Poblacion"].sum(skipna=True)) if "Poblacion" in out else 0
+    if "Poblacion" not in out.columns:
+        out["Poblacion"] = np.nan
+    total_pop = float(out["Poblacion"].sum(skipna=True))
     rate_col = f"Incidencia x {multiplier:,}".replace(",", " ")
     out[rate_col] = np.where(out["Poblacion"].gt(0), out["Casos"] / out["Poblacion"] * multiplier, np.nan)
     out["% casos estatales"] = np.where(total_cases > 0, out["Casos"] / total_cases * 100, np.nan)
@@ -193,12 +189,12 @@ def build_centroid_map(base: pd.DataFrame, geojson: dict[str, Any] | None,
 
     heat_points: list[list[float]] = []
     max_cases = max(int(counts["Casos"].max()), 1) if not counts.empty else 1
-    for row in counts.itertuples(index=False):
-        center = centers.get(row.__mun_key)
+    for _, row in counts.iterrows():
+        center = centers.get(str(row["__mun_key"]))
         if not center:
             continue
         lat, lon, canonical = center
-        cases = int(row.Casos)
+        cases = int(row["Casos"])
         heat_points.extend([[lat, lon]] * min(cases, 500))
         radius = 5 + 16 * np.sqrt(cases / max_cases)
         popup = f"<b>{canonical}</b><br>Casos: {cases}<br>Ubicación: centroide municipal aproximado"
