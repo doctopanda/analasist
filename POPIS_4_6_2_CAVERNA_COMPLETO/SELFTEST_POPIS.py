@@ -13,7 +13,7 @@ from modulos.canal_endemico import attach_current, build_endemic_channel, pathog
 from modulos.comparativo import compare_systems
 from modulos.exportacion import excel_bytes, graphics_zip, html_bytes, word_bytes
 from modulos.indicadores import calculate_indicators
-from modulos.io_utils import discover_assets, ensure_structure, process_inbox
+from modulos.io_utils import classify_file, discover_assets, ensure_structure, process_inbox
 from modulos.runtime import load_runtime
 from modulos.sinave import load_bundle, pathogen_table, summary, weekly_series
 from modulos.suive import load_suive
@@ -59,6 +59,47 @@ def make_rows(year: int, weeks: range, prefix: str) -> list[dict]:
     return rows
 
 
+def write_historical_suive_book(path: Path) -> None:
+    rows = [["Año"] + list(range(1, 54))]
+    for year in range(2018, 2027):
+        rows.append([year] + [1000 + (year - 2018) * 10 + week for week in range(1, 54)])
+    raw = pd.DataFrame(rows)
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        raw.to_excel(writer, sheet_name="SUIVE", index=False, header=False)
+        pd.DataFrame({"SINAVE": []}).to_excel(writer, sheet_name="SINAVE", index=False)
+
+
+def write_population_book(path: Path) -> None:
+    rows = []
+    specs = [
+        ("26030", "HERMOSILLO", 1000000),
+        ("26018", "CAJEME", 450000),
+        ("26043", "NOGALES", 280000),
+    ]
+    # Dos sexos × dos grupos quinquenales. La suma POB debe recuperar el total municipal.
+    for clave, mun, total in specs:
+        parts = [total * 0.24, total * 0.26, total * 0.25, total * 0.25]
+        for sexo, edad, pob in [
+            ("Hombres", "00-04", parts[0]),
+            ("Hombres", "05-09", parts[1]),
+            ("Mujeres", "00-04", parts[2]),
+            ("Mujeres", "05-09", parts[3]),
+        ]:
+            rows.append({
+                "CLAVE": clave,
+                "CLAVE_ENT": 26,
+                "NOM_ENT": "Sonora",
+                "MUN": mun,
+                "SEXO": sexo,
+                "AÑO": 2026,
+                "EDAD_QUIN": edad,
+                "POB": pob,
+            })
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        pd.DataFrame({"Portada": ["Proyecciones municipales"]}).to_excel(writer, sheet_name="README", index=False)
+        pd.DataFrame(rows).to_excel(writer, sheet_name="Sonora", index=False)
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "POPIS"
@@ -73,16 +114,15 @@ def main() -> int:
         current_rows = make_rows(2026, range(1, 13), "26") + make_rows(2026, range(53, 54), "26F")
         write_tsv(root / "data/actual" / "Diarreas_actual.xls", current_rows)
 
-        suive_rows = []
-        for year in range(2018, 2027):
-            for week in range(1, 54):
-                suive_rows.append({"Año": year, "Semana": week, "Casos": 1000 + (year - 2018) * 10 + week})
-        pd.DataFrame(suive_rows).to_csv(root / "data/suive" / "SUIVE.csv", index=False)
-        pd.DataFrame([
-            {"Municipio": "HERMOSILLO", "Poblacion": 1000000, "Año": 2026},
-            {"Municipio": "CAJEME", "Poblacion": 450000, "Año": 2026},
-            {"Municipio": "NOGALES", "Poblacion": 280000, "Año": 2026},
-        ]).to_csv(root / "data/poblacion" / "poblacion.csv", index=False)
+        # Replica la familia de archivo que usa el usuario: Canal endémico con hojas SUIVE/SINAVE.
+        suive_path = root / "data/suive" / "Canal endemico EDAs_SUIVE_SINAVE (1)(2).xlsx"
+        write_historical_suive_book(suive_path)
+        assert classify_file(suive_path) == "suive"
+
+        # Replica la estructura LONG municipal que POPIS ya reconocía previamente.
+        pop_path = root / "data/poblacion" / "Sonora.ProyeccionesPoblacionMunicipales2015-2030(2).xlsx"
+        write_population_book(pop_path)
+        assert classify_file(pop_path) == "poblacion"
 
         geo = {
             "type": "FeatureCollection",
@@ -98,6 +138,8 @@ def main() -> int:
         assert sorted(assets.sinave_by_year) == [2022, 2023, 2024, 2025, 2026]
         assert assets.current_year == 2026 and assets.cutoff_week == 12
         assert any("SE53" in warning for warning in assets.warnings)
+        assert assets.suive_file.name.startswith("Canal endemico")
+        assert assets.population_file.name.startswith("Sonora.Proyecciones")
 
         base = load_bundle(assets)
         assert len(base) == 53 and base["Patógeno identificado"].any()
@@ -127,6 +169,12 @@ def main() -> int:
         assert "Razón acumulada SINAVE/SUIVE" in accum_cmp.columns
 
         pop = normalize_population(assets.population_file, 2026)
+        assert pop is not None and len(pop) == 3
+        totals = dict(zip(pop["Municipio"], pop["Poblacion"]))
+        assert round(float(totals["HERMOSILLO"])) == 1000000
+        assert round(float(totals["CAJEME"])) == 450000
+        assert round(float(totals["NOGALES"])) == 280000
+
         incidence = incidence_table(base[(base["Año"].eq(2026)) & pd.to_numeric(base["SemanaInicio"], errors="coerce").le(12)], pop, 100000)
         assert set(incidence["Municipio"]) == {"HERMOSILLO", "CAJEME", "NOGALES"}
         assert int(incidence["Casos"].sum()) == 12
@@ -157,7 +205,7 @@ def main() -> int:
         ctx = load_runtime(root, process_updates=False, allow_geo_download=False)
         assert ctx.has_sinave and ctx.has_suive and ctx.geojson and ctx.population is not None
         assert ctx.cutoff_week == 13
-        print("POPIS 4.6.2 CAVERNA COMPLETO R2: SELFTEST OK")
+        print("POPIS 4.6.2 CAVERNA COMPLETO R3: SELFTEST OK")
     return 0
 
 
