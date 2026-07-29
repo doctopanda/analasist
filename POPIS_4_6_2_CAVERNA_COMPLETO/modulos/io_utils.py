@@ -70,7 +70,13 @@ def decode_bytes(raw: bytes) -> str:
 
 def read_table(source: str | Path | bytes | BinaryIO, filename: str | None = None,
                sheet_name: str | int | None = 0, dtype: Any = str) -> pd.DataFrame:
-    """Lee CSV, TSV, XLSX y los .xls SINAVE que realmente son texto tabulado."""
+    """Lee CSV, TSV, XLSX y los .xls SINAVE que realmente son texto tabulado.
+
+    Algunos archivos SINAVE tienen extensión .xls pero son texto con tabuladores. En
+    cambio XLSX reales son contenedores ZIP y XLS clásicos son OLE binarios. POPIS
+    identifica primero la firma binaria para evitar interpretar bytes de un Excel real
+    como si fueran TSV por la aparición accidental de caracteres de tabulación.
+    """
     if isinstance(source, (str, Path)):
         path = Path(source)
         raw = path.read_bytes()
@@ -81,9 +87,15 @@ def read_table(source: str | Path | bytes | BinaryIO, filename: str | None = Non
         raw = source.read()
 
     suffix = Path(filename or "archivo").suffix.lower()
-    head = decode_bytes(raw[:16384])
+    is_zip_excel = raw[:4] == b"PK\x03\x04"
+    is_ole_excel = raw[:8] == b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
+    is_binary_excel = is_zip_excel or is_ole_excel
 
-    if "\t" in head and ("SemanaInicio" in head or "Fec_captura" in head or head.count("\t") >= 5):
+    head = decode_bytes(raw[:16384]) if not is_binary_excel else ""
+
+    if not is_binary_excel and "\t" in head and (
+        "SemanaInicio" in head or "Fec_captura" in head or head.count("\t") >= 5
+    ):
         return pd.read_csv(io.StringIO(decode_bytes(raw)), sep="\t", dtype=dtype, keep_default_na=False)
 
     if suffix in {".csv", ".txt"}:
@@ -190,11 +202,9 @@ def _classify_excel_special(path: Path) -> str | None:
     """Reconoce los libros históricos usados por POPIS aunque la hoja útil no sea la primera."""
     name = norm_key(path.stem)
 
-    # Fuente histórica convencional usada por POPIS desde versiones previas.
     if "CANAL ENDEMICO" in name and ("SUIVE" in name or "SUAVE" in name):
         return "suive"
 
-    # Proyecciones municipales de Sonora 2015-2030.
     if "PROYECCIONES" in name and "POBLACION" in name and "MUNICIPALES" in name:
         sheet = find_sheet(path, ["Sonora"])
         if sheet:
@@ -203,10 +213,8 @@ def _classify_excel_special(path: Path) -> str | None:
                     return "poblacion"
             except Exception:
                 pass
-        # El nombre es muy específico; se deja que normalize_population haga la validación final.
         return "poblacion"
 
-    # Detección estructural multihoja para copias renombradas.
     for sheet in [find_sheet(path, ["Sonora"]), find_sheet(path, ["SUIVE"]), 0]:
         if sheet is None:
             continue
