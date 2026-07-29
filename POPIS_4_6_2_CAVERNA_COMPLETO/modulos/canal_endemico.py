@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
+
+from .sinave import observed_cutoff_week
 
 
 def build_endemic_channel(series: pd.DataFrame, current_year: int | None = None,
@@ -10,7 +11,8 @@ def build_endemic_channel(series: pd.DataFrame, current_year: int | None = None,
     """Construye canal cuartílico semanal con Q1, mediana y Q3.
 
     `series` debe tener Año, Semana, Casos. El año actual no entra al histórico salvo que
-    se solicite explícitamente mediante historical_years.
+    se solicite explícitamente mediante historical_years. Los faltantes permanecen como
+    NaN y nunca se reinterpretan automáticamente como cero.
     """
     required = {"Año", "Semana", "Casos"}
     if not required.issubset(series.columns):
@@ -43,6 +45,7 @@ def build_endemic_channel(series: pd.DataFrame, current_year: int | None = None,
 
 
 def attach_current(channel: pd.DataFrame, series: pd.DataFrame, year: int, cutoff_week: int | None = None) -> pd.DataFrame:
+    """Une el año actual sin rellenar con cero las semanas posteriores al corte."""
     current = series[pd.to_numeric(series["Año"], errors="coerce").eq(year)].copy()
     current["Semana"] = pd.to_numeric(current["Semana"], errors="coerce")
     if cutoff_week is not None:
@@ -52,6 +55,12 @@ def attach_current(channel: pd.DataFrame, series: pd.DataFrame, year: int, cutof
 
 
 def pathogen_weekly_series(base: pd.DataFrame, pathogen: str) -> pd.DataFrame:
+    """Serie de detecciones por patógeno limitada a la cobertura real de SINAVE.
+
+    El horizonte se toma de la base completa, no de la última detección del patógeno.
+    Así puede haber ceros reales dentro del periodo cubierto, pero no una cola de ceros
+    después de la última semana con información disponible.
+    """
     if base.empty or pathogen not in base.columns:
         return pd.DataFrame(columns=["Año", "Semana", "Casos"])
     work = base.copy()
@@ -59,12 +68,20 @@ def pathogen_weekly_series(base: pd.DataFrame, pathogen: str) -> pd.DataFrame:
     work["Semana"] = pd.to_numeric(work.get("SemanaInicio"), errors="coerce").astype("Int64")
     work["Casos"] = pd.to_numeric(work[pathogen], errors="coerce").fillna(0)
     work = work[work["Semana"].between(1, 53) & work["Año"].notna()]
+    if work.empty:
+        return pd.DataFrame(columns=["Año", "Semana", "Casos"])
     agg = work.groupby(["Año", "Semana"], as_index=False)["Casos"].sum()
-    years = sorted(int(y) for y in agg["Año"].dropna().unique())
-    if not years:
-        return agg
-    full = pd.MultiIndex.from_product([years, range(1, 54)], names=["Año", "Semana"]).to_frame(index=False)
-    return full.merge(agg, on=["Año", "Semana"], how="left").fillna({"Casos": 0})
+    frames: list[pd.DataFrame] = []
+    for year in sorted(int(y) for y in work["Año"].dropna().unique()):
+        cutoff = observed_cutoff_week(base, year)
+        if cutoff is None:
+            continue
+        skeleton = pd.DataFrame({"Año": year, "Semana": range(1, cutoff + 1)})
+        year_agg = agg[agg["Año"].eq(year)]
+        frames.append(skeleton.merge(year_agg, on=["Año", "Semana"], how="left").fillna({"Casos": 0}))
+    if not frames:
+        return pd.DataFrame(columns=["Año", "Semana", "Casos"])
+    return pd.concat(frames, ignore_index=True)
 
 
 def classify_zone(value: float | int | None, q1: float | None, median: float | None, q3: float | None) -> str:
