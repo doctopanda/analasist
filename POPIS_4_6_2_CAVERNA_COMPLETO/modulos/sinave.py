@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-
-import numpy as np
 import pandas as pd
 
-from .io_utils import Assets, first_existing, infer_year, read_table
+from .io_utils import Assets, infer_cutoff_week, infer_year, read_table
 
 PATHOGENS = [
     "Salmonella", "Shigella", "E. coli patógena", "Rotavirus",
@@ -89,6 +85,20 @@ def load_bundle(assets: Assets) -> pd.DataFrame:
     return base.reset_index(drop=True)
 
 
+def observed_cutoff_week(base: pd.DataFrame, year: int) -> int | None:
+    """Última SE con cobertura observable para un año.
+
+    En el año vigente aplica la guarda de calendario de io_utils para descartar
+    semanas futuras aisladas. No interpreta semanas posteriores sin registros como 0.
+    """
+    if base.empty or "Año" not in base.columns:
+        return None
+    subset = base[pd.to_numeric(base["Año"], errors="coerce").eq(int(year))]
+    if subset.empty:
+        return None
+    return infer_cutoff_week(subset, year=int(year))
+
+
 def cutoff_base(base: pd.DataFrame, year: int, cutoff_week: int, exact_week: bool = False) -> pd.DataFrame:
     if base.empty:
         return base.copy()
@@ -124,6 +134,12 @@ def pathogen_table(base: pd.DataFrame, year: int, cutoff_week: int, exact_week: 
 
 
 def weekly_series(base: pd.DataFrame, years: list[int] | None = None) -> pd.DataFrame:
+    """Serie semanal con cero solo dentro del periodo efectivamente observado.
+
+    Un hueco entre semanas ya cubiertas puede representarse como 0 casos. En cambio,
+    las semanas posteriores al último dato observado no se materializan, por lo que
+    Plotly no dibuja una cola artificial de ceros.
+    """
     if base.empty:
         return pd.DataFrame(columns=["Año", "Semana", "Casos"])
     work = base.copy()
@@ -132,9 +148,21 @@ def weekly_series(base: pd.DataFrame, years: list[int] | None = None) -> pd.Data
     work = work[work["Semana"].between(1, 53) & work["Año"].notna()]
     if years:
         work = work[work["Año"].isin(years)]
+    if work.empty:
+        return pd.DataFrame(columns=["Año", "Semana", "Casos"])
+
     agg = work.groupby(["Año", "Semana"], as_index=False).size().rename(columns={"size": "Casos"})
-    full = pd.MultiIndex.from_product([sorted(agg["Año"].unique()), range(1, 54)], names=["Año", "Semana"]).to_frame(index=False)
-    return full.merge(agg, on=["Año", "Semana"], how="left").fillna({"Casos": 0})
+    frames: list[pd.DataFrame] = []
+    for year in sorted(int(y) for y in work["Año"].dropna().unique()):
+        cutoff = observed_cutoff_week(base, year)
+        if cutoff is None:
+            continue
+        skeleton = pd.DataFrame({"Año": year, "Semana": range(1, cutoff + 1)})
+        year_agg = agg[agg["Año"].eq(year)]
+        frames.append(skeleton.merge(year_agg, on=["Año", "Semana"], how="left").fillna({"Casos": 0}))
+    if not frames:
+        return pd.DataFrame(columns=["Año", "Semana", "Casos"])
+    return pd.concat(frames, ignore_index=True)
 
 
 def comparison_at_week(base: pd.DataFrame, cutoff_week: int) -> pd.DataFrame:
