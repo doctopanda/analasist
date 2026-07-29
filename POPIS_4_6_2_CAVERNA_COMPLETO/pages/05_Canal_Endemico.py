@@ -19,14 +19,25 @@ hero("Canal endémico", subtitle="Referencia histórica semanal · cuartiles Q1,
 def draw_channel(frame: pd.DataFrame, current_col: str | None, title: str):
     fig = go.Figure()
     if not frame.empty:
-        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q3"], mode="lines", line=dict(width=0), showlegend=False))
-        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q1"], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(231,111,118,.17)", name="Q1–Q3"))
-        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Mediana"], mode="lines", line=dict(color=GREEN, width=2), name="Mediana"))
-        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q1"], mode="lines", line=dict(color="#89B0AE", dash="dot"), name="Q1"))
-        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q3"], mode="lines", line=dict(color=CORAL, dash="dot"), name="Q3"))
+        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q3"], mode="lines", line=dict(width=0), showlegend=False, connectgaps=False))
+        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q1"], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(231,111,118,.17)", name="Q1–Q3", connectgaps=False))
+        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Mediana"], mode="lines", line=dict(color=GREEN, width=2), name="Mediana", connectgaps=False))
+        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q1"], mode="lines", line=dict(color="#89B0AE", dash="dot"), name="Q1", connectgaps=False))
+        fig.add_trace(go.Scatter(x=frame["Semana"], y=frame["Q3"], mode="lines", line=dict(color=CORAL, dash="dot"), name="Q3", connectgaps=False))
         if current_col and current_col in frame:
-            fig.add_trace(go.Scatter(x=frame["Semana"], y=frame[current_col], mode="lines+markers", line=dict(color=NAVY, width=3), name=current_col))
+            fig.add_trace(go.Scatter(
+                x=frame["Semana"],
+                y=frame[current_col],
+                mode="lines+markers",
+                line=dict(color=NAVY, width=3),
+                marker=dict(size=6),
+                name=current_col,
+                connectgaps=False,
+            ))
+    fig.update_layout(hovermode="x unified")
+    fig.update_yaxes(rangemode="tozero")
     return style_plotly(fig, title)
+
 
 mode = st.sidebar.radio("Motor", ["SUIVE/SUAVE", "SINAVE total", "SINAVE por patógeno"])
 
@@ -47,6 +58,7 @@ if mode == "SUIVE/SUAVE":
     if len(used) < 3:
         st.warning("Historia insuficiente para un canal operativo robusto. POPIS muestra el cálculo exploratorio, pero recomienda al menos 3 años y preferentemente 5 o más.")
     st.plotly_chart(draw_channel(frame, f"Casos {current_year}", f"SUIVE/SUAVE · histórico {', '.join(map(str, used))}"), use_container_width=True)
+    st.caption("Las semanas sin dato posterior al último corte permanecen vacías. POPIS no las transforma en cero.")
     st.dataframe(frame, use_container_width=True, hide_index=True)
 
 elif mode == "SINAVE total":
@@ -64,6 +76,7 @@ elif mode == "SINAVE total":
     if len(used) < 3:
         st.warning("SINAVE no reúne todavía profundidad histórica suficiente para un canal robusto. La visualización es exploratoria.")
     st.plotly_chart(draw_channel(frame, f"Casos {current_year}", f"SINAVE total · histórico {', '.join(map(str, used))}"), use_container_width=True)
+    st.caption("Después de la última semana observada, la serie actual queda en blanco. No se dibuja una cola de ceros.")
     st.dataframe(frame, use_container_width=True, hide_index=True)
 
 else:
@@ -85,6 +98,7 @@ else:
     if len(used) < 3:
         st.warning("Profundidad histórica limitada. Interprete este canal como exploratorio.")
     st.plotly_chart(draw_channel(frame, f"Casos {current_year}", f"{pathogen} · histórico {', '.join(map(str, used))}"), use_container_width=True)
+    st.caption("Los ceros solo se completan dentro del periodo cubierto por SINAVE; las semanas futuras sin información quedan ausentes.")
     st.dataframe(frame, use_container_width=True, hide_index=True)
 
 st.caption("El año actual se representa contra el histórico seleccionado y no se incorpora automáticamente al cálculo de límites.")
