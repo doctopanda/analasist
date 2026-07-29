@@ -5,7 +5,7 @@ import plotly.express as px
 import streamlit as st
 
 from modulos.runtime import load_runtime
-from modulos.sinave import PATHOGENS, cutoff_base, pathogen_table, weekly_series
+from modulos.sinave import PATHOGENS, cutoff_base, observed_cutoff_week, weekly_series
 from modulos.tema_caverna import PLOTLY_COLORS, apply_theme, hero, section, style_plotly
 
 st.set_page_config(page_title="POPIS · SINAVE", page_icon="🧫", layout="wide")
@@ -21,9 +21,8 @@ if not ctx.has_sinave:
 years = sorted(pd.to_numeric(ctx.sinave["Año"], errors="coerce").dropna().astype(int).unique())
 year = st.sidebar.selectbox("Año", years, index=len(years) - 1)
 year_base = ctx.sinave[pd.to_numeric(ctx.sinave["Año"], errors="coerce").eq(year)]
-valid_weeks = pd.to_numeric(year_base["SemanaInicio"], errors="coerce")
-max_week = int(valid_weeks[valid_weeks.between(1, 53)].max()) if valid_weeks[valid_weeks.between(1, 53)].notna().any() else 53
-cutoff = st.sidebar.slider("Corte SE", 1, 53, max_week)
+max_week = observed_cutoff_week(ctx.sinave, year) or 53
+cutoff = st.sidebar.slider("Corte SE", 1, 53, min(max_week, 53))
 mun_col = "Mun_Res" if "Mun_Res" in year_base.columns else None
 if mun_col:
     municipalities = sorted(x for x in year_base[mun_col].fillna("").astype(str).str.strip().unique() if x)
@@ -42,7 +41,7 @@ b.metric("Con patógeno identificado", f"{int(work['Patógeno identificado'].sum
 c.metric("Pendientes", f"{int(work['Estado del resultado'].eq('Pendiente / sin diagnóstico final').sum()):,}")
 d.metric("Rechazados", f"{int(work['Estado del resultado'].eq('Muestra rechazada / sin diagnóstico').sum()):,}")
 
-left, right = st.columns(2)
+left, right = st.columns(2, gap="large")
 with left:
     status = work["Estado del resultado"].value_counts().rename_axis("Estado").reset_index(name="Casos")
     fig = px.pie(status, values="Casos", names="Estado", hole=.48,
@@ -56,14 +55,26 @@ with right:
     if ptab.empty:
         st.info("No hay detecciones positivas en este corte.")
     else:
-        fig = px.bar(ptab, x="Detecciones", y="Patógeno", orientation="h",
-                     color="Patógeno", color_discrete_sequence=PLOTLY_COLORS, title="Patógenos identificados")
+        fig = px.bar(
+            ptab,
+            x="Detecciones",
+            y="Patógeno",
+            orientation="h",
+            color="Patógeno",
+            color_discrete_sequence=PLOTLY_COLORS,
+            title="Patógenos identificados",
+        )
+        fig.update_layout(showlegend=False)
+        fig.update_yaxes(title=None)
         st.plotly_chart(style_plotly(fig), use_container_width=True)
 
 section("Serie semanal")
 series = weekly_series(ctx.sinave, [year])
 fig = px.line(series, x="Semana", y="Casos", markers=True, title=f"SINAVE {year} · casos por semana")
+fig.update_layout(hovermode="x unified", showlegend=False)
+fig.update_yaxes(rangemode="tozero")
 st.plotly_chart(style_plotly(fig), use_container_width=True)
+st.caption(f"Cobertura observada: hasta SE{max_week}. Las semanas posteriores sin registros no se dibujan como cero.")
 
 section("Detalle nominal")
 preferred = [c for c in ["Folio", "Fecha_Inicio", "SemanaInicio", "Mun_Res", "Diag_Prob", "Diag_Final", "Estado del resultado", "Patógenos identificados", "Archivo de origen"] if c in work.columns]
