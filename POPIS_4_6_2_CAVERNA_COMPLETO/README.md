@@ -84,21 +84,43 @@ La instalación no modifica los paquetes globales de Python.
 
 ## Bases
 
-### SINAVE
-Coloca bases históricas en `data/historicos/` y la base vigente en `data/actual/`. Los `.xls` que en realidad son texto tabulado son detectados automáticamente.
+### SINAVE nominal
+Coloca bases históricas `Diarreas_*.xls` en `data/historicos/` y la base vigente en `data/actual/`. Los `.xls` que en realidad son texto tabulado son detectados automáticamente. El eje temporal principal es `SemanaInicio`.
 
-### SUIVE/SUAVE
+### SUIVE/SUAVE y libro de canal endémico
 Coloca el histórico en `data/suive/`. POPIS reconoce tanto formato largo (`Año`, `Semana`, `Casos`) como el formato semanal ancho utilizado por el libro de canal endémico.
 
-### Población
-Coloca la tabla municipal en `data/poblacion/`. POPIS busca municipio, población y año mediante nombres equivalentes. Si no existe un denominador compatible, muestra conteos pero no inventa tasas.
+Está soportada explícitamente la familia de archivos:
+
+```text
+Canal endemico EDAs_SUIVE_SINAVE*.xlsx
+```
+
+POPIS busca la hoja `SUIVE` aunque no sea la hoja activa y la usa como fuente convencional histórica. Si el libro contiene una hoja `SINAVE` vacía o preparada como plantilla, no se transforma en casos nominales: los registros SINAVE por paciente siguen viniendo de las bases `Diarreas_*.xls`.
+
+### Población municipal
+Coloca la fuente en `data/poblacion/`. Además de tablas simples, POPIS reconoce explícitamente:
+
+```text
+Sonora.ProyeccionesPoblacionMunicipales2015-2030*.xlsx
+```
+
+Busca la hoja `Sonora` y admite la estructura longitudinal:
+
+```text
+CLAVE | CLAVE_ENT | NOM_ENT | MUN | SEXO | AÑO | EDAD_QUIN | POB
+```
+
+Para la incidencia municipal selecciona el año solicitado, conserva Sonora (`CLAVE_ENT = 26`) y suma `POB` por municipio sobre Hombres y Mujeres y los grupos de edad disponibles. No toma otro año silenciosamente cuando el año solicitado no existe.
 
 ### Cartografía
 POPIS usa centroides municipales. Si no existe GeoJSON en `data/geografia/`, puede descargar el Marco Geoestadístico municipal de Sonora desde el servicio oficial de INEGI y guardarlo localmente. No se envían domicilios ni datos nominales a geocodificadores públicos.
 
 ## Actualización semanal
 
-También puedes copiar la nueva fuente a `data/entrada/`. POPIS clasifica los archivos reconocibles, respalda la fuente operativa anterior y los mueve al directorio correspondiente.
+También puedes copiar una nueva fuente a `data/entrada/`. POPIS clasifica los archivos reconocibles, respalda la fuente operativa anterior y los mueve al directorio correspondiente.
+
+Los dos libros anteriores pueden dejarse directamente en `data/entrada/`: el primero se enruta a `data/suive/` y el segundo a `data/poblacion/`.
 
 ## Criterios epidemiológicos importantes
 
@@ -108,6 +130,7 @@ También puedes copiar la nueva fuente a `data/entrada/`. POPIS clasifica los ar
 - La métrica comparativa se denomina **Razón de registro SINAVE/SUIVE**, no subregistro.
 - Los centroides son aproximaciones territoriales, no domicilios.
 - `FecDefuncion` se reporta como defunción registrada en la base, no como defunción normativa por EDA sin validación adicional.
+- Una semana futura o posterior al último dato observado se mantiene como ausente (`NaN`), no se convierte en cero.
 
 ## Visual CAVERNA
 
