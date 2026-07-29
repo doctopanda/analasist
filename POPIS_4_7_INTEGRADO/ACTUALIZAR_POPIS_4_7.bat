@@ -4,8 +4,8 @@ setlocal
 cd /d "%~dp0"
 
 echo ============================================================
-echo  POPIS 4.7 - INTEGRACION AUTOMATICA
-echo  Centro de Datos + Mapa Territorial
+echo  POPIS 4.8 - VISUAL CAVERNA
+echo  Integracion automatica + identidad visual epidemiologica
 echo ============================================================
 echo.
 
@@ -40,7 +40,8 @@ if %ERRORLEVEL% NEQ 0 (
   echo La actualizacion no se completo. Revisa el mensaje anterior.
 ) else (
   echo.
-  echo Listo. Abre POPIS con tu INICIAR_POPIS.bat habitual.
+  echo Listo. POPIS ya tiene el visual CAVERNA.
+  echo Abre POPIS con tu INICIAR_POPIS.bat habitual.
 )
 echo.
 pause
