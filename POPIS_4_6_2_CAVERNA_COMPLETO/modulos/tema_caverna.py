@@ -23,7 +23,11 @@ PLOTLY_COLORS = [NAVY, CORAL, GREEN, BLUE, PURPLE, AMBER, RED]
 
 
 def apply_theme() -> None:
-    """Aplica el lenguaje visual CAVERNA a toda la página Streamlit."""
+    """Aplica el lenguaje visual CAVERNA a toda la página Streamlit.
+
+    La separación superior es deliberada: Streamlit mantiene una barra fija en la
+    parte superior y, sin este colchón, el hero de POPIS puede quedar cortado.
+    """
     st.markdown(
         f"""
         <style>
@@ -36,7 +40,14 @@ def apply_theme() -> None:
             --popis-text: {TEXT};
             --popis-muted: {MUTED};
         }}
+        html {{ scroll-padding-top: 5rem; }}
         .stApp {{ background: {BG}; color: {TEXT}; }}
+        [data-testid="stHeader"] {{
+            background: rgba(244,246,249,.97) !important;
+            border-bottom: 1px solid rgba(20,33,61,.07);
+            backdrop-filter: blur(8px);
+        }}
+        [data-testid="stToolbar"] {{ top: .25rem; }}
         [data-testid="stSidebar"] {{
             background: linear-gradient(180deg, #101C35 0%, {NAVY} 55%, #172845 100%);
             border-right: 1px solid rgba(255,255,255,.08);
@@ -49,7 +60,12 @@ def apply_theme() -> None:
             background: linear-gradient(90deg, rgba(231,111,118,.94), rgba(201,79,92,.88));
             box-shadow: 0 8px 24px rgba(0,0,0,.15);
         }}
-        .block-container {{ max-width: 1500px; padding-top: 1.25rem; padding-bottom: 3rem; }}
+        .block-container,
+        [data-testid="stMainBlockContainer"] {{
+            max-width: 1500px;
+            padding-top: 5.25rem !important;
+            padding-bottom: 3rem !important;
+        }}
         h1, h2, h3 {{ color: {NAVY}; letter-spacing: -0.02em; }}
         h2, h3 {{ font-weight: 800 !important; }}
         hr {{ border-color: #E7EAF0; }}
@@ -61,6 +77,7 @@ def apply_theme() -> None:
             padding: 14px 16px;
             box-shadow: 0 10px 26px rgba(20,33,61,.07);
             min-height: 112px;
+            overflow: visible;
         }}
         div[data-testid="stMetricLabel"] {{ color: {MUTED}; font-weight: 700; }}
         div[data-testid="stMetricValue"] {{ color: {NAVY}; font-weight: 900; }}
@@ -68,6 +85,7 @@ def apply_theme() -> None:
         [data-testid="stPlotlyChart"], [data-testid="stVegaLiteChart"] {{
             background: {CARD}; border: 1px solid #E7EAF0; border-radius: 18px;
             padding: 8px; box-shadow: 0 9px 28px rgba(20,33,61,.055);
+            overflow: hidden;
         }}
         div[data-testid="stExpander"] {{
             background: {CARD}; border: 1px solid #E7EAF0; border-radius: 16px;
@@ -85,17 +103,21 @@ def apply_theme() -> None:
         [data-testid="stAlert"] {{ border-radius: 14px; }}
         .popis-hero {{
             background: linear-gradient(105deg, #FFF6F7 0%, #FCECEE 48%, #F7E7EB 100%);
-            border: 1px solid #F4D8DD; border-radius: 24px; padding: 22px 26px;
-            margin-bottom: 18px; box-shadow: 0 12px 34px rgba(87,34,50,.08);
+            border: 1px solid #F4D8DD; border-radius: 24px; padding: 24px 26px;
+            margin: .15rem 0 20px 0; box-shadow: 0 12px 34px rgba(87,34,50,.08);
             display: flex; align-items: center; justify-content: space-between; gap: 22px;
+            min-height: 118px; overflow: visible;
         }}
-        .popis-brand {{ display:flex; align-items:center; gap:18px; }}
+        .popis-brand {{ display:flex; align-items:center; gap:18px; min-width:0; }}
         .popis-symbol {{
-            width: 62px; height: 62px; border-radius: 19px;
+            width: 62px; height: 62px; min-width:62px; border-radius: 19px;
             background: {NAVY}; color:white; display:flex; align-items:center; justify-content:center;
             font-size:31px; box-shadow: 0 10px 24px rgba(20,33,61,.18);
         }}
-        .popis-title {{ font-size: 34px; line-height: 1; font-weight: 950; color:{NAVY}; }}
+        .popis-title {{
+            font-size: 36px; line-height: 1.16; font-weight: 950; color:{NAVY};
+            padding-top: 2px; overflow: visible; white-space: normal;
+        }}
         .popis-subtitle {{ color:{MUTED}; font-size: 14px; font-weight:650; margin-top:7px; }}
         .popis-badges {{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }}
         .popis-badge {{
@@ -105,23 +127,28 @@ def apply_theme() -> None:
         }}
         .popis-cutoff {{
             min-width:170px; background:white; border-radius:17px; padding:13px 16px;
-            border:1px solid #E9D7DB; text-align:right;
+            border:1px solid #E9D7DB; text-align:right; flex:0 0 auto;
         }}
         .popis-cutoff small {{ color:{MUTED}; font-weight:700; }}
-        .popis-cutoff strong {{ color:{NAVY}; font-size:20px; }}
+        .popis-cutoff strong {{ color:{NAVY}; font-size:20px; white-space:nowrap; }}
         .popis-section-title {{
             color:{CORAL_DARK}; font-size:17px; font-weight:900; letter-spacing:.01em;
-            margin: 16px 0 8px 0;
+            margin: 22px 0 10px 0;
         }}
         .popis-card {{
             background:white; border:1px solid #E7EAF0; border-radius:18px; padding:16px 18px;
             box-shadow: 0 9px 26px rgba(20,33,61,.055); margin-bottom:12px;
         }}
         .popis-note {{ color:{MUTED}; font-size:12px; }}
-        @media (max-width: 780px) {{
+        @media (max-width: 980px) {{
+            .block-container, [data-testid="stMainBlockContainer"] {{ padding-top: 4.85rem !important; }}
             .popis-hero {{ flex-direction:column; align-items:flex-start; }}
             .popis-cutoff {{ width:100%; text-align:left; }}
-            .popis-title {{ font-size:28px; }}
+        }}
+        @media (max-width: 780px) {{
+            .popis-title {{ font-size:30px; line-height:1.18; }}
+            .popis-symbol {{ width:54px; height:54px; min-width:54px; font-size:27px; }}
+            .popis-hero {{ padding:20px; border-radius:20px; }}
         }}
         </style>
         """,
@@ -166,15 +193,32 @@ def card(text: str) -> None:
 
 
 def style_plotly(fig, title: str | None = None):
+    """Normaliza Plotly evitando que título y leyenda se monten entre sí."""
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="#FFFFFF",
         font=dict(color=TEXT, family="Arial"),
-        title=dict(text=title or fig.layout.title.text, font=dict(color=CORAL_DARK, size=18)),
-        margin=dict(l=35, r=20, t=55, b=35),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title=dict(
+            text=title or fig.layout.title.text,
+            font=dict(color=CORAL_DARK, size=18),
+            x=.01,
+            xanchor="left",
+            y=.985,
+            yanchor="top",
+        ),
+        margin=dict(l=48, r=24, t=94, b=48),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.075,
+            xanchor="right",
+            x=1,
+            title=None,
+            bgcolor="rgba(255,255,255,.82)",
+        ),
+        hoverlabel=dict(bgcolor="white", font_color=TEXT),
     )
-    fig.update_xaxes(showgrid=False, linecolor="#E7EAF0")
-    fig.update_yaxes(gridcolor="#EEF1F5", zerolinecolor="#E7EAF0")
+    fig.update_xaxes(showgrid=False, linecolor="#E7EAF0", automargin=True)
+    fig.update_yaxes(gridcolor="#EEF1F5", zerolinecolor="#E7EAF0", automargin=True)
     return fig
