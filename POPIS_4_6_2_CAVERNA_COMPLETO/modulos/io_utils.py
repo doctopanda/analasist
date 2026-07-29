@@ -7,7 +7,7 @@ import re
 import shutil
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, Iterable
 
@@ -126,12 +126,30 @@ def infer_year(df: pd.DataFrame, fallback_name: str = "") -> int | None:
     return int(match.group(1)) if match else None
 
 
-def infer_cutoff_week(df: pd.DataFrame) -> int | None:
+def infer_cutoff_week(df: pd.DataFrame, year: int | None = None, today: date | None = None) -> int | None:
+    """Obtiene la última semana observada sin convertir semanas futuras en cero.
+
+    En el año calendario vigente se ignoran semanas posteriores a la semana actual.
+    Esto evita que valores aislados como SE53 en una descarga de mitad de año eleven
+    artificialmente el corte epidemiológico. Los huecos posteriores al último dato
+    observado quedan como ausencia de dato, no como cero.
+    """
     column = first_existing(df.columns, ["SemanaInicio", "Semana de inicio", "SEMANA_INICIO", "Semana"])
     if not column:
         return None
     weeks = pd.to_numeric(df[column], errors="coerce")
     weeks = weeks[weeks.between(1, 53)]
+    if weeks.empty:
+        return None
+
+    today = today or date.today()
+    if year is None:
+        year = infer_year(df)
+    if year == today.year:
+        calendar_cap = max(1, min(53, int(today.isocalendar().week)))
+        plausible = weeks[weeks.le(calendar_cap)]
+        if not plausible.empty:
+            weeks = plausible
     return int(weeks.max()) if not weeks.empty else None
 
 
@@ -209,7 +227,17 @@ def discover_assets(root: str | Path | None = None) -> Assets:
         assets.current_year = max(assets.sinave_by_year)
         assets.current_sinave = assets.sinave_by_year[assets.current_year]
         try:
-            assets.cutoff_week = infer_cutoff_week(read_table(assets.current_sinave))
+            current_df = read_table(assets.current_sinave)
+            assets.cutoff_week = infer_cutoff_week(current_df, year=assets.current_year)
+            week_col = first_existing(current_df.columns, ["SemanaInicio", "Semana de inicio", "SEMANA_INICIO", "Semana"])
+            if week_col and assets.cutoff_week:
+                raw_weeks = pd.to_numeric(current_df[week_col], errors="coerce")
+                later = sorted(set(raw_weeks[raw_weeks.between(assets.cutoff_week + 1, 53)].dropna().astype(int)))
+                if later:
+                    assets.warnings.append(
+                        "Se detectaron semanas posteriores al corte observado "
+                        f"({', '.join('SE'+str(w) for w in later)}). No se usan como ceros ni amplían la serie actual."
+                    )
         except Exception:
             pass
 
