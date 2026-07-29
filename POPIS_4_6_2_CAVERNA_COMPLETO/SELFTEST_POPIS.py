@@ -67,7 +67,11 @@ def main() -> int:
 
         for year in [2022, 2023, 2024, 2025]:
             write_tsv(root / "data/historicos" / f"Diarreas_{year}.xls", make_rows(year, range(1, 11), str(year)[2:]))
-        write_tsv(root / "data/actual" / "Diarreas_actual.xls", make_rows(2026, range(1, 13), "26"))
+
+        # Base vigente con datos reales hasta SE12 y un valor aislado SE53. POPIS debe
+        # detectar SE12 como corte y jamás dibujar SE13-SE53 como ceros.
+        current_rows = make_rows(2026, range(1, 13), "26") + make_rows(2026, range(53, 54), "26F")
+        write_tsv(root / "data/actual" / "Diarreas_actual.xls", current_rows)
 
         suive_rows = []
         for year in range(2018, 2027):
@@ -93,8 +97,10 @@ def main() -> int:
         assets = discover_assets(root)
         assert sorted(assets.sinave_by_year) == [2022, 2023, 2024, 2025, 2026]
         assert assets.current_year == 2026 and assets.cutoff_week == 12
+        assert any("SE53" in warning for warning in assets.warnings)
+
         base = load_bundle(assets)
-        assert len(base) == 52 and base["Patógeno identificado"].any()
+        assert len(base) == 53 and base["Patógeno identificado"].any()
         s = summary(base, 2026, 12)
         assert s["casos_acumulados"] == 12
         assert not pathogen_table(base, 2026, 12).empty
@@ -102,25 +108,32 @@ def main() -> int:
         suive = load_suive(assets.suive_file)
         assert len(suive) == 9 * 53
         sin_series = weekly_series(base)
+        current_series = sin_series[sin_series["Año"].eq(2026)]
+        assert int(current_series["Semana"].max()) == 12
+        assert not current_series["Semana"].gt(12).any()
+
         channel, years = build_endemic_channel(suive, current_year=2026, historical_years=[2018, 2019, 2022, 2023, 2024, 2025])
         assert len(channel) == 53 and len(years) == 6
-        attached = attach_current(channel, suive, 2026, 12)
+        attached = attach_current(channel, sin_series, 2026, 12)
         assert "Casos 2026" in attached.columns
+        assert attached.loc[attached["Semana"].gt(12), "Casos 2026"].isna().all()
+
         pseries = pathogen_weekly_series(base, "Salmonella")
-        assert not pseries.empty
+        current_pathogen = pseries[pseries["Año"].eq(2026)]
+        assert int(current_pathogen["Semana"].max()) == 12
 
         weekly_cmp, accum_cmp = compare_systems(base, suive, 12, 2026)
         assert len(weekly_cmp) == 12 and "Razón de registro SINAVE/SUIVE" in weekly_cmp.columns
         assert "Razón acumulada SINAVE/SUIVE" in accum_cmp.columns
 
         pop = normalize_population(assets.population_file, 2026)
-        incidence = incidence_table(base[base["Año"].eq(2026)], pop, 100000)
+        incidence = incidence_table(base[(base["Año"].eq(2026)) & pd.to_numeric(base["SemanaInicio"], errors="coerce").le(12)], pop, 100000)
         assert set(incidence["Municipio"]) == {"HERMOSILLO", "CAJEME", "NOGALES"}
         assert int(incidence["Casos"].sum()) == 12
-        map_obj = build_centroid_map(base[base["Año"].eq(2026)], geo)
+        map_obj = build_centroid_map(base[(base["Año"].eq(2026)) & pd.to_numeric(base["SemanaInicio"], errors="coerce").le(12)], geo)
         assert len(map_html_bytes(map_obj)) > 5000
 
-        ind = calculate_indicators(base[base["Año"].eq(2026)], monthly_vibrio_target=50)
+        ind = calculate_indicators(base[(base["Año"].eq(2026)) & pd.to_numeric(base["SemanaInicio"], errors="coerce").le(12)], monthly_vibrio_target=50)
         assert len(ind) >= 8 and {"Numerador", "Denominador", "Resultado %", "Meta %"}.issubset(ind.columns)
         qa, issues = audit_base(base)
         assert int(qa.loc[qa["Indicador"].eq("Registros"), "Valor"].iloc[0]) == len(base)
@@ -143,7 +156,8 @@ def main() -> int:
 
         ctx = load_runtime(root, process_updates=False, allow_geo_download=False)
         assert ctx.has_sinave and ctx.has_suive and ctx.geojson and ctx.population is not None
-        print("POPIS 4.6.2 CAVERNA COMPLETO: SELFTEST OK")
+        assert ctx.cutoff_week == 13
+        print("POPIS 4.6.2 CAVERNA COMPLETO R2: SELFTEST OK")
     return 0
 
 
