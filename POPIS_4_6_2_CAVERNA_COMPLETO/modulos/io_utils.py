@@ -14,6 +14,7 @@ from typing import Any, BinaryIO, Iterable
 import pandas as pd
 
 DATA_EXTENSIONS = {".xls", ".xlsx", ".csv", ".txt"}
+EXCEL_EXTENSIONS = {".xls", ".xlsx", ".xlsm", ".xlsb"}
 
 
 def project_root(start: str | Path | None = None) -> Path:
@@ -102,6 +103,28 @@ def read_excel_raw(path: str | Path, sheet_name: str | int | None = 0) -> pd.Dat
     return pd.read_excel(path, sheet_name=sheet_name, header=None, engine=engine)
 
 
+def excel_sheet_names(path: str | Path) -> list[str]:
+    """Devuelve hojas sin depender de la hoja activa del libro."""
+    path = Path(path)
+    if path.suffix.lower() not in EXCEL_EXTENSIONS:
+        return []
+    try:
+        engine = "xlrd" if path.suffix.lower() == ".xls" else "openpyxl"
+        return list(pd.ExcelFile(path, engine=engine).sheet_names)
+    except Exception:
+        return []
+
+
+def find_sheet(path: str | Path, candidates: Iterable[str]) -> str | None:
+    sheets = excel_sheet_names(path)
+    normalized = {norm_key(sheet): sheet for sheet in sheets}
+    for candidate in candidates:
+        found = normalized.get(norm_key(candidate))
+        if found:
+            return found
+    return None
+
+
 def file_sha256(path: str | Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -127,13 +150,7 @@ def infer_year(df: pd.DataFrame, fallback_name: str = "") -> int | None:
 
 
 def infer_cutoff_week(df: pd.DataFrame, year: int | None = None, today: date | None = None) -> int | None:
-    """Obtiene la última semana observada sin convertir semanas futuras en cero.
-
-    En el año calendario vigente se ignoran semanas posteriores a la semana actual.
-    Esto evita que valores aislados como SE53 en una descarga de mitad de año eleven
-    artificialmente el corte epidemiológico. Los huecos posteriores al último dato
-    observado quedan como ausencia de dato, no como cero.
-    """
+    """Obtiene la última semana observada sin convertir semanas futuras en cero."""
     column = first_existing(df.columns, ["SemanaInicio", "Semana de inicio", "SEMANA_INICIO", "Semana"])
     if not column:
         return None
@@ -153,6 +170,57 @@ def infer_cutoff_week(df: pd.DataFrame, year: int | None = None, today: date | N
     return int(weeks.max()) if not weeks.empty else None
 
 
+def _is_sinave_table(df: pd.DataFrame) -> bool:
+    keys = {norm_key(c) for c in df.columns}
+    sinave_signals = sum(k in keys for k in map(norm_key, ["Folio", "SemanaInicio", "Fec_captura", "Diag_Final"]))
+    pathogen_signals = sum(k in keys for k in map(norm_key, ["Salmonella", "Shigella", "Rotavirus", "VibrioCholerae"]))
+    return sinave_signals >= 2 and (sinave_signals + pathogen_signals) >= 3
+
+
+def _is_population_table(df: pd.DataFrame) -> bool:
+    mun_col = first_existing(df.columns, ["MUN", "Municipio", "MUNICIPIO", "NOM_MUN", "NOMGEO", "DES_MPO_RES"])
+    pop_col = first_existing(df.columns, ["POB", "Poblacion", "POBLACION", "Población", "Total", "TOTAL"])
+    year_col = first_existing(df.columns, ["Año", "AÑO", "ANIO", "ANO", "Anio", "year"])
+    key_col = first_existing(df.columns, ["CLAVE", "CVE_GEO", "CVE_MUN", "CLAVE_MUN"])
+    age_cols = [c for c in df.columns if str(c).lower().startswith(("pobm_", "pobh_"))]
+    return bool(mun_col and (pop_col or age_cols) and (year_col or key_col))
+
+
+def _classify_excel_special(path: Path) -> str | None:
+    """Reconoce los libros históricos usados por POPIS aunque la hoja útil no sea la primera."""
+    name = norm_key(path.stem)
+
+    # Fuente histórica convencional usada por POPIS desde versiones previas.
+    if "CANAL ENDEMICO" in name and ("SUIVE" in name or "SUAVE" in name):
+        return "suive"
+
+    # Proyecciones municipales de Sonora 2015-2030.
+    if "PROYECCIONES" in name and "POBLACION" in name and "MUNICIPALES" in name:
+        sheet = find_sheet(path, ["Sonora"])
+        if sheet:
+            try:
+                if _is_population_table(read_table(path, sheet_name=sheet)):
+                    return "poblacion"
+            except Exception:
+                pass
+        # El nombre es muy específico; se deja que normalize_population haga la validación final.
+        return "poblacion"
+
+    # Detección estructural multihoja para copias renombradas.
+    for sheet in [find_sheet(path, ["Sonora"]), find_sheet(path, ["SUIVE"]), 0]:
+        if sheet is None:
+            continue
+        try:
+            df = read_table(path, sheet_name=sheet)
+        except Exception:
+            continue
+        if _is_sinave_table(df):
+            return "sinave"
+        if _is_population_table(df):
+            return "poblacion"
+    return None
+
+
 def classify_file(path: str | Path) -> str:
     path = Path(path)
     if path.suffix.lower() in {".json", ".geojson"}:
@@ -162,20 +230,24 @@ def classify_file(path: str | Path) -> str:
                 return "geografia"
         except Exception:
             return "desconocido"
-    if path.suffix.lower() not in DATA_EXTENSIONS:
+    if path.suffix.lower() not in DATA_EXTENSIONS | EXCEL_EXTENSIONS:
         return "desconocido"
+
+    if path.suffix.lower() in EXCEL_EXTENSIONS:
+        special = _classify_excel_special(path)
+        if special:
+            return special
+
     try:
         df = read_table(path)
     except Exception:
         return "desconocido"
-    keys = {norm_key(c) for c in df.columns}
-    sinave_signals = sum(k in keys for k in map(norm_key, ["Folio", "SemanaInicio", "Fec_captura", "Diag_Final"]))
-    pathogen_signals = sum(k in keys for k in map(norm_key, ["Salmonella", "Shigella", "Rotavirus", "VibrioCholerae"]))
-    if sinave_signals >= 2 and (sinave_signals + pathogen_signals) >= 3:
+    if _is_sinave_table(df):
         return "sinave"
+    keys = {norm_key(c) for c in df.columns}
     if {norm_key("Año"), norm_key("Semana"), norm_key("Casos")}.issubset(keys):
         return "suive"
-    if first_existing(df.columns, ["Municipio", "NOM_MUN", "NOMGEO"]) and first_existing(df.columns, ["Poblacion", "POBLACION", "Población", "POB", "Total"]):
+    if _is_population_table(df):
         return "poblacion"
     name = norm_key(path.name)
     if "SUIVE" in name or "SUAVE" in name or "CANAL ENDEMICO" in name:
@@ -241,9 +313,9 @@ def discover_assets(root: str | Path | None = None) -> Assets:
         except Exception:
             pass
 
-    suive = [p for p in (root / "data/suive").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS]
+    suive = [p for p in (root / "data/suive").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS | EXCEL_EXTENSIONS]
     assets.suive_file = _latest(suive)
-    population = [p for p in (root / "data/poblacion").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS]
+    population = [p for p in (root / "data/poblacion").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS | EXCEL_EXTENSIONS]
     assets.population_file = _latest(population)
     geo = [p for p in (root / "data/geografia").iterdir() if p.is_file() and p.suffix.lower() in {".json", ".geojson"}]
     assets.municipal_geojson = _latest(geo)
