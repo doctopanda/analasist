@@ -10,7 +10,7 @@ from modulos.comparativo import compare_systems
 from modulos.exportacion import excel_bytes, html_bytes, word_bytes
 from modulos.indicadores import calculate_indicators
 from modulos.runtime import load_runtime
-from modulos.sinave import comparison_at_week, cutoff_base, pathogen_table, summary
+from modulos.sinave import comparison_at_week, cutoff_base, observed_cutoff_week, pathogen_table, summary
 from modulos.territorio import incidence_table, normalize_population
 
 
@@ -28,9 +28,7 @@ def main() -> int:
     year = args.anio or ctx.current_year
     if year is None:
         raise SystemExit("No fue posible determinar el año de análisis.")
-    year_base = ctx.sinave[pd.to_numeric(ctx.sinave["Año"], errors="coerce").eq(year)]
-    weeks = pd.to_numeric(year_base.get("SemanaInicio"), errors="coerce")
-    detected = int(weeks[weeks.between(1, 53)].max()) if weeks[weeks.between(1, 53)].notna().any() else 53
+    detected = observed_cutoff_week(ctx.sinave, year) or 53
     cutoff = args.semana or detected
     if not 1 <= cutoff <= 53:
         raise SystemExit("--semana debe estar entre 1 y 53.")
