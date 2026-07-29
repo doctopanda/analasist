@@ -11,7 +11,7 @@ import pandas as pd
 import requests
 from folium.plugins import HeatMap
 
-from .io_utils import first_existing, norm_key, read_table
+from .io_utils import find_sheet, first_existing, norm_key, read_table
 
 INEGI_SONORA_MUNICIPIOS = "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgem/26"
 MUNICIPALITY_CANDIDATES = ["Mun_Res", "Municipio residencia", "Municipio_Residencia", "MUNICIPIO_RESIDENCIA", "Municipio", "MUNICIPIO"]
@@ -101,39 +101,121 @@ def filter_sonora_residents(base: pd.DataFrame) -> pd.DataFrame:
     return work
 
 
+def _read_population_source(path: Path) -> pd.DataFrame | None:
+    """Lee población simple o el libro oficial municipal cuya hoja útil es `Sonora`."""
+    attempts: list[str | int] = []
+    if path.suffix.lower() in {".xlsx", ".xls", ".xlsm"}:
+        sonora = find_sheet(path, ["Sonora"])
+        if sonora:
+            attempts.append(sonora)
+    attempts.append(0)
+
+    seen: set[str] = set()
+    for sheet in attempts:
+        key = str(sheet)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            df = read_table(path, sheet_name=sheet)
+        except Exception:
+            continue
+        mun_col = first_existing(df.columns, ["MUN", "Municipio", "MUNICIPIO", "NOM_MUN", "NOMGEO", "DES_MPO_RES"])
+        pop_col = first_existing(df.columns, ["POB", "Poblacion", "POBLACION", "Población", "Total", "TOTAL"])
+        age_cols = [c for c in df.columns if str(c).lower().startswith(("pobm_", "pobh_"))]
+        if mun_col and (pop_col or age_cols):
+            return df
+    return None
+
+
 def normalize_population(path: str | Path | None, year: int | None = None) -> pd.DataFrame | None:
+    """Normaliza población municipal para incidencia.
+
+    Admite dos familias de fuente:
+    1) tabla simple Municipio/Población/Año;
+    2) `Sonora.ProyeccionesPoblacionMunicipales2015-2030.xlsx`, hoja `Sonora`,
+       con CLAVE, CLAVE_ENT, NOM_ENT, MUN, SEXO, AÑO, EDAD_QUIN y POB.
+
+    En la estructura longitudinal se suman POB por municipio para el año solicitado,
+    conservando Hombres + Mujeres y evitando duplicar filas de total si coexistieran.
+    """
     if not path:
         return None
-    try:
-        df = read_table(path)
-    except Exception:
+    path = Path(path)
+    df = _read_population_source(path)
+    if df is None or df.empty:
         return None
-    mun_col = first_existing(df.columns, ["Municipio", "MUNICIPIO", "NOM_MUN", "NOMGEO", "DES_MPO_RES"])
-    pop_col = first_existing(df.columns, ["Poblacion", "POBLACION", "Población", "POB", "Total", "TOTAL"])
-    year_col = first_existing(df.columns, ["Año", "ANIO", "ANO", "Anio", "year"])
+
+    mun_col = first_existing(df.columns, ["MUN", "Municipio", "MUNICIPIO", "NOM_MUN", "NOMGEO", "DES_MPO_RES"])
+    pop_col = first_existing(df.columns, ["POB", "Poblacion", "POBLACION", "Población", "Total", "TOTAL"])
+    year_col = first_existing(df.columns, ["Año", "AÑO", "ANIO", "ANO", "Anio", "year"])
+    entity_col = first_existing(df.columns, ["CLAVE_ENT", "CVE_ENT", "ENTIDAD", "CVE_EDO"])
+    sex_col = first_existing(df.columns, ["SEXO", "Sexo", "sex"])
+    key_col = first_existing(df.columns, ["CLAVE", "CVE_GEO", "CVE_MUN", "CLAVE_MUN"])
+
     if not mun_col:
         return None
+
     work = df.copy()
+
+    if entity_col:
+        entity = pd.to_numeric(work[entity_col], errors="coerce")
+        if entity.notna().any():
+            sonora = work[entity.eq(26)]
+            if not sonora.empty:
+                work = sonora
+
     if year_col and year is not None:
         years = pd.to_numeric(work[year_col], errors="coerce")
         exact = work[years.eq(int(year))]
         if not exact.empty:
             work = exact
+        else:
+            # Nunca toma otro año silenciosamente si la fuente sí tiene variable temporal.
+            return None
+
+    if sex_col:
+        sex_norm = work[sex_col].fillna("").astype(str).map(norm_key)
+        hm = {"HOMBRES", "HOMBRE", "MUJERES", "MUJER", "MASCULINO", "FEMENINO"}
+        if sex_norm.isin(hm).any():
+            work = work[sex_norm.isin(hm)].copy()
+
     if pop_col:
-        work["Poblacion"] = pd.to_numeric(work[pop_col].astype(str).str.replace(",", "", regex=False), errors="coerce")
+        work["Poblacion"] = pd.to_numeric(
+            work[pop_col].astype(str).str.replace(",", "", regex=False).str.replace(" ", "", regex=False),
+            errors="coerce",
+        )
     else:
         age_cols = [c for c in work.columns if str(c).lower().startswith(("pobm_", "pobh_"))]
         if not age_cols:
             return None
         numeric = work[age_cols].apply(pd.to_numeric, errors="coerce")
         work["Poblacion"] = numeric.sum(axis=1, min_count=1)
+
     work["Municipio"] = work[mun_col].fillna("").astype(str).str.strip()
     work["__mun_key"] = work["Municipio"].map(norm_key)
-    work = work[work["Municipio"].ne("") & work["Poblacion"].notna()]
+
+    if key_col:
+        code = work[key_col].fillna("").astype(str).str.extract(r"(\d+)", expand=False)
+        code = code.str.zfill(5)
+        work["CVE_GEO"] = code
+        work["CVE_MUN"] = pd.to_numeric(code.str[-3:], errors="coerce").astype("Int64")
+
+    work = work[work["Municipio"].ne("") & work["Poblacion"].notna() & work["Poblacion"].ge(0)]
     if work.empty:
         return None
-    work = work[["__mun_key", "Municipio", "Poblacion"]].drop_duplicates()
-    return work.groupby(["__mun_key", "Municipio"], as_index=False)["Poblacion"].sum()
+
+    group_cols = ["__mun_key", "Municipio"]
+    result = work.groupby(group_cols, as_index=False)["Poblacion"].sum(min_count=1)
+
+    if "CVE_GEO" in work.columns:
+        codes = work.groupby("__mun_key", as_index=False)["CVE_GEO"].first()
+        result = result.merge(codes, on="__mun_key", how="left")
+    if "CVE_MUN" in work.columns:
+        mun_codes = work.groupby("__mun_key", as_index=False)["CVE_MUN"].first()
+        result = result.merge(mun_codes, on="__mun_key", how="left")
+
+    return result.sort_values("Municipio").reset_index(drop=True)
 
 
 def municipal_counts(base: pd.DataFrame) -> pd.DataFrame:
