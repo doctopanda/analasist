@@ -1,0 +1,5 @@
+POPIS 4.6.2 CAVERNA COMPLETO
+Procesador Operativo de Patógenos e Indicadores Sanitarios
+Build: 2026-07-29
+Mapa predeterminado: centroides municipales
+Visual: CAVERNA
