@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import zipfile
@@ -26,6 +27,7 @@ def write_tsv(path: Path, rows: list[dict]) -> None:
 
 def make_rows(year: int, weeks: range, prefix: str) -> list[dict]:
     rows = []
+    first_week = min(weeks)
     for week in weeks:
         municipality = "HERMOSILLO" if week % 2 else "CAJEME"
         rows.append({
@@ -39,19 +41,19 @@ def make_rows(year: int, weeks: range, prefix: str) -> list[dict]:
             "Mun_Res": municipality,
             "CVE_EDO_RES": 26,
             "CVE_MPO_RES": 30 if municipality == "HERMOSILLO" else 18,
-            "Diag_Prob": "COLERA" if week == min(weeks) else "SINDROME DIARREICO",
+            "Diag_Prob": "COLERA" if week == first_week else "SINDROME DIARREICO",
             "Diag_Final": "POSITIVO" if week % 3 == 0 else "NEGATIVO A ENTEROPATOGENOS",
             "Salmonella": "Positivo" if week % 3 == 0 else "",
             "Shigella": "Positivo" if week % 5 == 0 else "",
             "Rotavirus": "",
-            "VibrioCholerae": "Positivo" if week == min(weeks) else "",
-            "SerogrupoVibrioCholerae": "NO O1" if week == min(weeks) else "",
+            "VibrioCholerae": "Positivo" if week == first_week else "",
+            "SerogrupoVibrioCholerae": "NO O1" if week == first_week else "",
             "VibrioParahaemolyticus": "",
             "Patotipo_EColi_InDRE": "",
             "Rotavirus_InDRE": "",
             "OtroVirus_InDRE": "",
-            "MuestraVibrio": "Hisopo rectal" if week == min(weeks) else "",
-            "FecRecepLab": f"15/06/{year}" if week == min(weeks) else "",
+            "MuestraVibrio": "Hisopo rectal" if week == first_week else "",
+            "FecRecepLab": f"15/06/{year}" if week == first_week else "",
             "Monitoreo": "Si" if week % 10 == 0 else "No",
         })
     return rows
@@ -129,7 +131,7 @@ def main() -> int:
         assert len(html_bytes("POPIS test", tables)) > 1000
         graph_zip = graphics_zip(sin_series, suive, tables["Patogenos"])
         assert len(graph_zip) > 1000
-        with zipfile.ZipFile(pd.io.common.BytesIO(graph_zip)) as zf:
+        with zipfile.ZipFile(io.BytesIO(graph_zip)) as zf:
             assert "SINAVE_series_semanales.png" in zf.namelist()
 
         write_tsv(root / "data/entrada" / "Diarreas_2026_actualizada.xls", make_rows(2026, range(1, 14), "26N"))
