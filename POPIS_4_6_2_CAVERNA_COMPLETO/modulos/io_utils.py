@@ -27,7 +27,8 @@ def ensure_structure(root: str | Path | None = None) -> Path:
     root = project_root(root)
     for rel in (
         "data/historicos", "data/actual", "data/suive", "data/poblacion",
-        "data/geografia", "data/entrada", "data/backups", "salidas", "cache", "logs",
+        "data/geografia", "data/redve", "data/entrada", "data/backups",
+        "salidas", "cache", "logs",
     ):
         (root / rel).mkdir(parents=True, exist_ok=True)
     return root
@@ -70,13 +71,7 @@ def decode_bytes(raw: bytes) -> str:
 
 def read_table(source: str | Path | bytes | BinaryIO, filename: str | None = None,
                sheet_name: str | int | None = 0, dtype: Any = str) -> pd.DataFrame:
-    """Lee CSV, TSV, XLSX y los .xls SINAVE que realmente son texto tabulado.
-
-    Algunos archivos SINAVE tienen extensión .xls pero son texto con tabuladores. En
-    cambio XLSX reales son contenedores ZIP y XLS clásicos son OLE binarios. POPIS
-    identifica primero la firma binaria para evitar interpretar bytes de un Excel real
-    como si fueran TSV por la aparición accidental de caracteres de tabulación.
-    """
+    """Lee CSV, TSV, XLSX y los .xls textuales usados por SINAVE y REDVE."""
     if isinstance(source, (str, Path)):
         path = Path(source)
         raw = path.read_bytes()
@@ -90,11 +85,11 @@ def read_table(source: str | Path | bytes | BinaryIO, filename: str | None = Non
     is_zip_excel = raw[:4] == b"PK\x03\x04"
     is_ole_excel = raw[:8] == b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
     is_binary_excel = is_zip_excel or is_ole_excel
-
     head = decode_bytes(raw[:16384]) if not is_binary_excel else ""
 
     if not is_binary_excel and "\t" in head and (
-        "SemanaInicio" in head or "Fec_captura" in head or head.count("\t") >= 5
+        "SemanaInicio" in head or "Fec_captura" in head or "DEFFOLIO" in head
+        or head.count("\t") >= 5
     ):
         return pd.read_csv(io.StringIO(decode_bytes(raw)), sep="\t", dtype=dtype, keep_default_na=False)
 
@@ -116,7 +111,6 @@ def read_excel_raw(path: str | Path, sheet_name: str | int | None = 0) -> pd.Dat
 
 
 def excel_sheet_names(path: str | Path) -> list[str]:
-    """Devuelve hojas sin depender de la hoja activa del libro."""
     path = Path(path)
     if path.suffix.lower() not in EXCEL_EXTENSIONS:
         return []
@@ -128,8 +122,7 @@ def excel_sheet_names(path: str | Path) -> list[str]:
 
 
 def find_sheet(path: str | Path, candidates: Iterable[str]) -> str | None:
-    sheets = excel_sheet_names(path)
-    normalized = {norm_key(sheet): sheet for sheet in sheets}
+    normalized = {norm_key(sheet): sheet for sheet in excel_sheet_names(path)}
     for candidate in candidates:
         found = normalized.get(norm_key(candidate))
         if found:
@@ -148,15 +141,15 @@ def file_sha256(path: str | Path) -> str:
 def infer_year(df: pd.DataFrame, fallback_name: str = "") -> int | None:
     for column in ("Año", "ANIO", "ANO", "Anio"):
         if column in df.columns:
-            s = pd.to_numeric(df[column], errors="coerce").dropna().astype(int)
-            s = s[s.between(2000, 2100)]
-            if not s.empty:
-                return int(s.mode().iloc[0])
+            values = pd.to_numeric(df[column], errors="coerce").dropna().astype(int)
+            values = values[values.between(2000, 2100)]
+            if not values.empty:
+                return int(values.mode().iloc[0])
     for column in ("Fec_captura", "Fecha_Inicio", "Fecha de inicio", "FECHA_INICIO"):
         if column in df.columns:
-            s = pd.to_datetime(df[column], dayfirst=True, errors="coerce").dt.year.dropna().astype(int)
-            if not s.empty:
-                return int(s.mode().iloc[0])
+            values = pd.to_datetime(df[column], dayfirst=True, errors="coerce").dt.year.dropna().astype(int)
+            if not values.empty:
+                return int(values.mode().iloc[0])
     match = re.search(r"(20\d{2})", fallback_name)
     return int(match.group(1)) if match else None
 
@@ -170,7 +163,6 @@ def infer_cutoff_week(df: pd.DataFrame, year: int | None = None, today: date | N
     weeks = weeks[weeks.between(1, 53)]
     if weeks.empty:
         return None
-
     today = today or date.today()
     if year is None:
         year = infer_year(df)
@@ -189,6 +181,14 @@ def _is_sinave_table(df: pd.DataFrame) -> bool:
     return sinave_signals >= 2 and (sinave_signals + pathogen_signals) >= 3
 
 
+def _is_redve_table(df: pd.DataFrame) -> bool:
+    keys = {norm_key(c) for c in df.columns}
+    required = {norm_key("DEFFOLIO"), norm_key("DEFFECH_DEF")}
+    identity = {norm_key("DEFAPEPATER"), norm_key("DEFNOMBRE")}
+    causes = {norm_key("DEFCAUSABAS"), norm_key("CAUSASUJVIGCVE"), norm_key("DEFUNCION_DICTAMINADA")}
+    return required.issubset(keys) and bool(identity.intersection(keys)) and bool(causes.intersection(keys))
+
+
 def _is_population_table(df: pd.DataFrame) -> bool:
     mun_col = first_existing(df.columns, ["MUN", "Municipio", "MUNICIPIO", "NOM_MUN", "NOMGEO", "DES_MPO_RES"])
     pop_col = first_existing(df.columns, ["POB", "Poblacion", "POBLACION", "Población", "Total", "TOTAL"])
@@ -199,12 +199,16 @@ def _is_population_table(df: pd.DataFrame) -> bool:
 
 
 def _classify_excel_special(path: Path) -> str | None:
-    """Reconoce los libros históricos usados por POPIS aunque la hoja útil no sea la primera."""
     name = norm_key(path.stem)
-
+    if "REDVE" in name or "SEED" in name:
+        try:
+            if _is_redve_table(read_table(path)):
+                return "redve"
+        except Exception:
+            pass
+        return "redve"
     if "CANAL ENDEMICO" in name and ("SUIVE" in name or "SUAVE" in name):
         return "suive"
-
     if "PROYECCIONES" in name and "POBLACION" in name and "MUNICIPALES" in name:
         sheet = find_sheet(path, ["Sonora"])
         if sheet:
@@ -214,7 +218,6 @@ def _classify_excel_special(path: Path) -> str | None:
             except Exception:
                 pass
         return "poblacion"
-
     for sheet in [find_sheet(path, ["Sonora"]), find_sheet(path, ["SUIVE"]), 0]:
         if sheet is None:
             continue
@@ -222,6 +225,8 @@ def _classify_excel_special(path: Path) -> str | None:
             df = read_table(path, sheet_name=sheet)
         except Exception:
             continue
+        if _is_redve_table(df):
+            return "redve"
         if _is_sinave_table(df):
             return "sinave"
         if _is_population_table(df):
@@ -240,16 +245,19 @@ def classify_file(path: str | Path) -> str:
             return "desconocido"
     if path.suffix.lower() not in DATA_EXTENSIONS | EXCEL_EXTENSIONS:
         return "desconocido"
-
+    name = norm_key(path.name)
+    if "REDVE" in name or "SEED" in name:
+        return "redve"
     if path.suffix.lower() in EXCEL_EXTENSIONS:
         special = _classify_excel_special(path)
         if special:
             return special
-
     try:
         df = read_table(path)
     except Exception:
         return "desconocido"
+    if _is_redve_table(df):
+        return "redve"
     if _is_sinave_table(df):
         return "sinave"
     keys = {norm_key(c) for c in df.columns}
@@ -257,7 +265,6 @@ def classify_file(path: str | Path) -> str:
         return "suive"
     if _is_population_table(df):
         return "poblacion"
-    name = norm_key(path.name)
     if "SUIVE" in name or "SUAVE" in name or "CANAL ENDEMICO" in name:
         return "suive"
     return "desconocido"
@@ -271,6 +278,7 @@ class Assets:
     suive_file: Path | None = None
     population_file: Path | None = None
     municipal_geojson: Path | None = None
+    redve_file: Path | None = None
     current_year: int | None = None
     cutoff_week: int | None = None
     warnings: list[str] = field(default_factory=list)
@@ -283,7 +291,6 @@ def _latest(paths: list[Path]) -> Path | None:
 def discover_assets(root: str | Path | None = None) -> Assets:
     root = ensure_structure(root)
     assets = Assets(root=root)
-
     historical = [p for p in (root / "data/historicos").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS]
     current = [p for p in (root / "data/actual").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS]
 
@@ -292,6 +299,8 @@ def discover_assets(root: str | Path | None = None) -> Assets:
         for path in collection:
             try:
                 df = read_table(path)
+                if not _is_sinave_table(df):
+                    continue
                 year = infer_year(df, path.name)
                 if year:
                     candidates.append((year, path, priority))
@@ -322,11 +331,13 @@ def discover_assets(root: str | Path | None = None) -> Assets:
             pass
 
     suive = [p for p in (root / "data/suive").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS | EXCEL_EXTENSIONS]
-    assets.suive_file = _latest(suive)
     population = [p for p in (root / "data/poblacion").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS | EXCEL_EXTENSIONS]
-    assets.population_file = _latest(population)
     geo = [p for p in (root / "data/geografia").iterdir() if p.is_file() and p.suffix.lower() in {".json", ".geojson"}]
+    redve = [p for p in (root / "data/redve").iterdir() if p.is_file() and p.suffix.lower() in DATA_EXTENSIONS | EXCEL_EXTENSIONS]
+    assets.suive_file = _latest(suive)
+    assets.population_file = _latest(population)
     assets.municipal_geojson = _latest(geo)
+    assets.redve_file = _latest(redve)
     return assets
 
 
@@ -363,10 +374,13 @@ def process_inbox(root: str | Path | None = None) -> list[str]:
                 messages.append(f"SINAVE sin año identificable: {path.name}")
                 continue
             current_year = datetime.now().year
-            if year >= current_year:
-                destination = root / "data/actual" / "Diarreas_actual.xls"
-            else:
-                destination = root / "data/historicos" / f"Diarreas_{year}{path.suffix.lower()}"
+            destination = (
+                root / "data/actual" / "Diarreas_actual.xls"
+                if year >= current_year
+                else root / "data/historicos" / f"Diarreas_{year}{path.suffix.lower()}"
+            )
+        elif kind == "redve":
+            destination = root / "data/redve" / f"REDVE_actual{path.suffix.lower()}"
         elif kind == "suive":
             destination = root / "data/suive" / path.name
         elif kind == "poblacion":
