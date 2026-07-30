@@ -5,7 +5,7 @@ cd /d "%~dp0"
 set "VENV=%LOCALAPPDATA%\POPIS462\venv"
 
 echo ===============================================================
-echo  POPIS 4.6.2 CAVERNA - ARRANQUE SEGURO
+echo  POPIS 4.6.2 CAVERNA R5 - ARRANQUE SEGURO
 echo ===============================================================
 
 if not exist "%VENV%\Scripts\python.exe" (
@@ -21,7 +21,17 @@ if errorlevel 1 (
   exit /b 2
 )
 
+if exist "MODERNIZAR_STREAMLIT.py" (
+  "%VENV%\Scripts\python.exe" MODERNIZAR_STREAMLIT.py >nul
+  if errorlevel 1 (
+    echo No fue posible modernizar la compatibilidad de Streamlit.
+    pause
+    exit /b 3
+  )
+)
+
 if not exist "data\entrada" mkdir "data\entrada"
+if not exist "data\redve" mkdir "data\redve"
 start "" "http://127.0.0.1:8501"
 "%VENV%\Scripts\python.exe" -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501 --browser.gatherUsageStats false
 exit /b %errorlevel%
