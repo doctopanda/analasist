@@ -52,6 +52,11 @@ jobs:
         run: |
           python SELFTEST_POPIS.py
 
+      - name: SUIVE multiblock regression test
+        working-directory: POPIS_4_6_2_CAVERNA_COMPLETO
+        run: |
+          python TEST_SUIVE_BLOQUES.py
+
       - name: Validate standalone imports
         working-directory: POPIS_4_6_2_CAVERNA_COMPLETO
         run: |
@@ -100,22 +105,24 @@ jobs:
 
       - name: Inventory package
         run: |
-          echo '=== POPIS 4.6.2 R5 STREAMLIT FULL TREE ==='
+          echo '=== POPIS 4.6.2 R6 SUIVE 2026 FULL TREE ==='
           find POPIS_4_6_2_CAVERNA_COMPLETO -maxdepth 3 -type f | sort
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/app.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/MODERNIZAR_STREAMLIT.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/TEST_SUIVE_BLOQUES.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/INSTALAR_Y_ABRIR_POPIS.bat
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/00_Centro_de_Datos.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/02_SINAVE.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/09_Exportacion.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/redve.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/suive.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/tema_caverna.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/territorio.py
 
       - name: Upload complete POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_6_2_CAVERNA_COMPLETO_R5_STREAMLIT
+          name: POPIS_4_6_2_CAVERNA_COMPLETO_R6_SUIVE_2026
           path: POPIS_4_6_2_CAVERNA_COMPLETO/
           if-no-files-found: error
           retention-days: 30
