@@ -1,5 +1,7 @@
-POPIS 4.6.2 CAVERNA COMPLETO
+POPIS 4.6.2 CAVERNA COMPLETO · R4 REDVE
 Procesador Operativo de Patógenos e Indicadores Sanitarios
-Build: 2026-07-29
+Build: 2026-07-30
 Mapa predeterminado: centroides municipales
 Visual: CAVERNA
+Mortalidad: cruce auditable SINAVE + REDVE
+Comparadores: casos SE y acumulado al mismo corte por año
