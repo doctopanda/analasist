@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from .io_utils import Assets, infer_cutoff_week, infer_year, read_table
+from .redve import death_metrics
 
 PATHOGENS = [
     "Salmonella", "Shigella", "E. coli patógena", "Rotavirus",
@@ -18,6 +20,12 @@ def _series(df: pd.DataFrame, col: str) -> pd.Series:
 
 def _positive(s: pd.Series) -> pd.Series:
     return s.str.casefold().str.startswith("positivo")
+
+
+def _bool_series(df: pd.DataFrame, column: str) -> pd.Series:
+    if column not in df.columns:
+        return pd.Series(False, index=df.index, dtype=bool)
+    return df[column].fillna(False).astype(bool)
 
 
 def normalize_sinave(df: pd.DataFrame, source_name: str = "") -> pd.DataFrame:
@@ -51,11 +59,10 @@ def normalize_sinave(df: pd.DataFrame, source_name: str = "") -> pd.DataFrame:
 
     for name in PATHOGENS:
         out[name] = flags[name].astype(int)
-
-    labels: list[str] = []
-    for idx in out.index:
-        labels.append(" | ".join(name for name in PATHOGENS if bool(flags[name].loc[idx])))
-    out["Patógenos identificados"] = labels
+    out["Patógenos identificados"] = [
+        " | ".join(name for name in PATHOGENS if bool(flags[name].loc[idx]))
+        for idx in out.index
+    ]
     out["Patógeno identificado"] = out[PATHOGENS].sum(axis=1).gt(0)
 
     diag = _series(out, "Diag_Final").str.upper()
@@ -86,11 +93,6 @@ def load_bundle(assets: Assets) -> pd.DataFrame:
 
 
 def observed_cutoff_week(base: pd.DataFrame, year: int) -> int | None:
-    """Última SE con cobertura observable para un año.
-
-    En el año vigente aplica la guarda de calendario de io_utils para descartar
-    semanas futuras aisladas. No interpreta semanas posteriores sin registros como 0.
-    """
     if base.empty or "Año" not in base.columns:
         return None
     subset = base[pd.to_numeric(base["Año"], errors="coerce").eq(int(year))]
@@ -114,12 +116,15 @@ def cutoff_base(base: pd.DataFrame, year: int, cutoff_week: int, exact_week: boo
 def summary(base: pd.DataFrame, year: int, cutoff_week: int) -> dict[str, int | float]:
     cumulative = cutoff_base(base, year, cutoff_week)
     week = cutoff_base(base, year, cutoff_week, exact_week=True)
+    deaths = death_metrics(cumulative)
     return {
         "casos_acumulados": len(cumulative),
         "casos_semana": len(week),
         "positivos_acumulados": int(cumulative.get("Patógeno identificado", pd.Series(dtype=bool)).sum()),
         "positivos_semana": int(week.get("Patógeno identificado", pd.Series(dtype=bool)).sum()),
-        "defunciones_registradas": int(cumulative.get("FecDefuncion_dt", pd.Series(dtype="datetime64[ns]")).notna().sum()) if "FecDefuncion_dt" in cumulative else 0,
+        **deaths,
+        # Compatibilidad con páginas/exportaciones previas.
+        "defunciones_registradas": deaths["defunciones_integradas"],
     }
 
 
@@ -134,12 +139,7 @@ def pathogen_table(base: pd.DataFrame, year: int, cutoff_week: int, exact_week: 
 
 
 def weekly_series(base: pd.DataFrame, years: list[int] | None = None) -> pd.DataFrame:
-    """Serie semanal con cero solo dentro del periodo efectivamente observado.
-
-    Un hueco entre semanas ya cubiertas puede representarse como 0 casos. En cambio,
-    las semanas posteriores al último dato observado no se materializan, por lo que
-    Plotly no dibuja una cola artificial de ceros.
-    """
+    """Cero solo dentro del periodo observado; semanas futuras permanecen ausentes."""
     if base.empty:
         return pd.DataFrame(columns=["Año", "Semana", "Casos"])
     work = base.copy()
@@ -154,45 +154,97 @@ def weekly_series(base: pd.DataFrame, years: list[int] | None = None) -> pd.Data
     agg = work.groupby(["Año", "Semana"], as_index=False).size().rename(columns={"size": "Casos"})
     frames: list[pd.DataFrame] = []
     for year in sorted(int(y) for y in work["Año"].dropna().unique()):
-        cutoff = observed_cutoff_week(base, year)
-        if cutoff is None:
+        horizon = observed_cutoff_week(base, year)
+        if horizon is None:
             continue
-        skeleton = pd.DataFrame({"Año": year, "Semana": range(1, cutoff + 1)})
-        year_agg = agg[agg["Año"].eq(year)]
-        frames.append(skeleton.merge(year_agg, on=["Año", "Semana"], how="left").fillna({"Casos": 0}))
-    if not frames:
-        return pd.DataFrame(columns=["Año", "Semana", "Casos"])
-    return pd.concat(frames, ignore_index=True)
+        skeleton = pd.DataFrame({"Año": year, "Semana": range(1, horizon + 1)})
+        frames.append(skeleton.merge(agg[agg["Año"].eq(year)], on=["Año", "Semana"], how="left").fillna({"Casos": 0}))
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["Año", "Semana", "Casos"])
 
 
 def comparison_at_week(base: pd.DataFrame, cutoff_week: int) -> pd.DataFrame:
+    """Compara semana exacta y acumulado por año sin convertir falta de cobertura en cero."""
     years = sorted(pd.to_numeric(base.get("Año"), errors="coerce").dropna().astype(int).unique()) if not base.empty else []
-    rows = []
+    rows: list[dict[str, object]] = []
+    week_col = f"Casos SE{cutoff_week}"
+    cumulative_col = f"Acumulado ≤ SE{cutoff_week}"
     for year in years:
-        w = cutoff_base(base, year, cutoff_week, exact_week=True)
-        c = cutoff_base(base, year, cutoff_week, exact_week=False)
-        row = {
-            "Año": year,
-            f"Casos SE{cutoff_week}": len(w),
-            f"Acumulado ≤ SE{cutoff_week}": len(c),
-            "Positivos semana": int(w.get("Patógeno identificado", pd.Series(dtype=bool)).sum()),
-            "Positivos acumulados": int(c.get("Patógeno identificado", pd.Series(dtype=bool)).sum()),
-        }
-        for name in PATHOGENS:
-            row[name] = int(pd.to_numeric(w.get(name, 0), errors="coerce").fillna(0).sum()) if not w.empty else 0
+        horizon = observed_cutoff_week(base, year)
+        covered = horizon is not None and horizon >= cutoff_week
+        if covered:
+            exact = cutoff_base(base, year, cutoff_week, exact_week=True)
+            cumulative = cutoff_base(base, year, cutoff_week, exact_week=False)
+            row: dict[str, object] = {
+                "Año": year,
+                "Cobertura": f"Sí · hasta SE{horizon}",
+                week_col: len(exact),
+                cumulative_col: len(cumulative),
+                "Positivos semana": int(exact.get("Patógeno identificado", pd.Series(dtype=bool)).sum()),
+                "Positivos acumulados": int(cumulative.get("Patógeno identificado", pd.Series(dtype=bool)).sum()),
+            }
+            for name in PATHOGENS:
+                row[name] = int(pd.to_numeric(exact.get(name, 0), errors="coerce").fillna(0).sum()) if not exact.empty else 0
+        else:
+            row = {
+                "Año": year,
+                "Cobertura": f"No · hasta SE{horizon}" if horizon else "No disponible",
+                week_col: np.nan,
+                cumulative_col: np.nan,
+                "Positivos semana": np.nan,
+                "Positivos acumulados": np.nan,
+            }
+            for name in PATHOGENS:
+                row[name] = np.nan
         rows.append(row)
+
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+    result[f"Variación SE{cutoff_week} vs año previo %"] = pd.to_numeric(result[week_col], errors="coerce").pct_change(fill_method=None) * 100
+    result[f"Variación acumulada vs año previo %"] = pd.to_numeric(result[cumulative_col], errors="coerce").pct_change(fill_method=None) * 100
+    return result
+
+
+def death_comparison_by_year(base: pd.DataFrame, cutoff_week: int) -> pd.DataFrame:
+    years = sorted(pd.to_numeric(base.get("Año"), errors="coerce").dropna().astype(int).unique()) if not base.empty else []
+    rows: list[dict[str, object]] = []
+    for year in years:
+        horizon = observed_cutoff_week(base, year)
+        if horizon is None or horizon < cutoff_week:
+            rows.append({
+                "Año": year, "Cobertura": f"No · hasta SE{horizon}" if horizon else "No disponible",
+                "SINAVE": np.nan, "REDVE recuperadas": np.nan, "Integradas": np.nan,
+                "EDA dictaminadas REDVE": np.nan, "EDA pendientes REDVE": np.nan,
+            })
+            continue
+        metrics = death_metrics(cutoff_base(base, year, cutoff_week))
+        rows.append({
+            "Año": year,
+            "Cobertura": f"Sí · hasta SE{horizon}",
+            "SINAVE": metrics["defunciones_sinave"],
+            "REDVE recuperadas": metrics["defunciones_redve_recuperadas"],
+            "Integradas": metrics["defunciones_integradas"],
+            "EDA dictaminadas REDVE": metrics["muertes_eda_dictaminadas_redve"],
+            "EDA pendientes REDVE": metrics["muertes_eda_pendientes_redve"],
+        })
     return pd.DataFrame(rows)
 
 
 def mortality_registered(base: pd.DataFrame, cutoff_week: int | None = None) -> pd.DataFrame:
-    """Cuenta FecDefuncion como defunción registrada, no como muerte normativa EDA validada."""
-    if base.empty or "FecDefuncion_dt" not in base.columns:
-        return pd.DataFrame(columns=["Año", "Defunciones registradas"])
-    work = base.copy()
-    if cutoff_week and "SemanaInicio" in work.columns:
-        weeks = pd.to_numeric(work["SemanaInicio"], errors="coerce")
-        work = work[weeks.between(1, cutoff_week)]
-    work = work[work["FecDefuncion_dt"].notna()]
-    if work.empty:
-        return pd.DataFrame(columns=["Año", "Defunciones registradas"])
-    return work.groupby("Año", as_index=False).size().rename(columns={"size": "Defunciones registradas"})
+    """Serie de defunciones integradas, con desglose SINAVE y REDVE."""
+    if base.empty:
+        return pd.DataFrame(columns=["Año", "SINAVE", "REDVE recuperadas", "Defunciones integradas"])
+    years = sorted(pd.to_numeric(base.get("Año"), errors="coerce").dropna().astype(int).unique())
+    rows = []
+    for year in years:
+        frame = cutoff_base(base, year, cutoff_week or 53)
+        metrics = death_metrics(frame)
+        rows.append({
+            "Año": year,
+            "SINAVE": metrics["defunciones_sinave"],
+            "REDVE recuperadas": metrics["defunciones_redve_recuperadas"],
+            "Defunciones integradas": metrics["defunciones_integradas"],
+            "EDA dictaminadas REDVE": metrics["muertes_eda_dictaminadas_redve"],
+            "EDA pendientes REDVE": metrics["muertes_eda_pendientes_redve"],
+        })
+    return pd.DataFrame(rows)
