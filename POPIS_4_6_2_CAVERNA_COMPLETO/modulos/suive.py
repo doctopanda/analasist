@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .io_utils import first_existing, read_excel_raw, read_table
+from .io_utils import first_existing, norm_key, read_excel_raw, read_table
 
 
 def _long_from_standard(df: pd.DataFrame) -> pd.DataFrame | None:
@@ -23,29 +23,102 @@ def _long_from_standard(df: pd.DataFrame) -> pd.DataFrame | None:
     return out.sort_values(["Año", "Semana"]).reset_index(drop=True)
 
 
+def _number(value) -> float | None:
+    parsed = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    return None if pd.isna(parsed) else float(parsed)
+
+
+def _header_candidates(raw: pd.DataFrame) -> list[tuple[int, int, int]]:
+    """Localiza bloques Año + SE1..SE53 y los puntúa.
+
+    El libro institucional contiene varias matrices con los mismos años: casos brutos,
+    incidencia y tablas derivadas. El bloque de casos brutos se distingue porque su
+    encabezado incluye POBLACIÓN después de las 53 semanas.
+    """
+    candidates: list[tuple[int, int, int]] = []
+    for r in range(len(raw)):
+        values = raw.iloc[r].tolist()
+        normalized = [norm_key(value) for value in values]
+        for c, label in enumerate(normalized):
+            if not label or not (label == "ANO" or label.startswith("ANO ") or "ANO SE" in label):
+                continue
+            right_raw = values[c + 1:c + 61]
+            right_norm = normalized[c + 1:c + 61]
+            week_labels = set()
+            for value in right_raw:
+                numeric = _number(value)
+                if numeric is not None and 1 <= numeric <= 53 and float(numeric).is_integer():
+                    week_labels.add(int(numeric))
+            if len(week_labels) < 20:
+                continue
+            has_population = any("POBLACION" in text for text in right_norm)
+            # POBLACIÓN es la firma más fuerte del bloque de casos crudos.
+            score = (1000 if has_population else 0) + len(week_labels)
+            candidates.append((score, r, c))
+    return sorted(candidates, reverse=True)
+
+
+def _read_year_block(raw: pd.DataFrame, header_row: int, year_col: int) -> pd.DataFrame:
+    rows: list[dict[str, float | int]] = []
+    started = False
+    blank_run = 0
+    for r in range(header_row + 1, min(len(raw), header_row + 40)):
+        year_value = _number(raw.iat[r, year_col]) if year_col < raw.shape[1] else None
+        if year_value is None or not 2000 <= year_value <= 2100 or not float(year_value).is_integer():
+            if started:
+                blank_run += 1
+                if blank_run >= 2:
+                    break
+            continue
+        started = True
+        blank_run = 0
+        year = int(year_value)
+        weekly = pd.to_numeric(
+            pd.Series(raw.iloc[r, year_col + 1:year_col + 54].tolist()),
+            errors="coerce",
+        )
+        if weekly.notna().sum() == 0:
+            continue
+        for week, cases in enumerate(weekly, start=1):
+            if pd.notna(cases):
+                rows.append({"Año": year, "Semana": week, "Casos": float(cases)})
+    if not rows:
+        return pd.DataFrame(columns=["Año", "Semana", "Casos"])
+    return pd.DataFrame(rows).sort_values(["Año", "Semana"]).reset_index(drop=True)
+
+
 def _scan_wide(raw: pd.DataFrame) -> pd.DataFrame:
-    """Reconoce filas Año + 53 semanas, incluso en libros con títulos/formato visual."""
+    """Reconoce el bloque semanal correcto sin confundirlo con incidencia/canales."""
+    for _, header_row, year_col in _header_candidates(raw):
+        result = _read_year_block(raw, header_row, year_col)
+        if not result.empty and result["Año"].nunique() >= 2:
+            return result
+
+    # Respaldo para libros simples sin encabezado institucional.
     rows: list[dict[str, float | int]] = []
     for r in range(len(raw)):
         values = raw.iloc[r].tolist()
         for c, value in enumerate(values):
-            year = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
-            if pd.isna(year) or not 2000 <= float(year) <= 2100:
+            year = _number(value)
+            if year is None or not 2000 <= year <= 2100 or not float(year).is_integer():
                 continue
-            year_i = int(year)
-            after = values[c + 1:c + 60]
-            numeric = pd.to_numeric(pd.Series(after), errors="coerce")
-            if numeric.iloc[:53].notna().sum() < 20:
+            weekly = pd.to_numeric(pd.Series(values[c + 1:c + 54]), errors="coerce")
+            if weekly.notna().sum() < 20:
                 continue
-            weeks = numeric.iloc[:53]
-            for week, cases in enumerate(weeks, start=1):
+            for week, cases in enumerate(weekly, start=1):
                 if pd.notna(cases):
-                    rows.append({"Año": year_i, "Semana": week, "Casos": float(cases)})
+                    rows.append({"Año": int(year), "Semana": week, "Casos": float(cases)})
             break
     if not rows:
         return pd.DataFrame(columns=["Año", "Semana", "Casos"])
-    out = pd.DataFrame(rows)
-    return out.drop_duplicates(["Año", "Semana"], keep="last").sort_values(["Año", "Semana"]).reset_index(drop=True)
+    # El primer bloque suele ser la tabla cruda; no permitir que matrices posteriores
+    # de incidencia reemplacen los conteos semanales.
+    return (
+        pd.DataFrame(rows)
+        .drop_duplicates(["Año", "Semana"], keep="first")
+        .sort_values(["Año", "Semana"])
+        .reset_index(drop=True)
+    )
 
 
 def load_suive(path: str | Path) -> pd.DataFrame:
