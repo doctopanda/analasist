@@ -49,6 +49,7 @@ jobs:
           python - <<'PY'
           import modulos.tema_caverna
           import modulos.io_utils
+          import modulos.redve
           import modulos.sinave
           import modulos.suive
           import modulos.canal_endemico
@@ -68,6 +69,7 @@ jobs:
           mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/suive
           mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/poblacion
           mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/geografia
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/redve
           mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/entrada
           mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/backups
           mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/salidas
@@ -78,6 +80,7 @@ jobs:
           touch POPIS_4_6_2_CAVERNA_COMPLETO/data/suive/.gitkeep
           touch POPIS_4_6_2_CAVERNA_COMPLETO/data/poblacion/.gitkeep
           touch POPIS_4_6_2_CAVERNA_COMPLETO/data/geografia/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/redve/.gitkeep
           touch POPIS_4_6_2_CAVERNA_COMPLETO/data/entrada/.gitkeep
           touch POPIS_4_6_2_CAVERNA_COMPLETO/data/backups/.gitkeep
           touch POPIS_4_6_2_CAVERNA_COMPLETO/salidas/.gitkeep
@@ -88,19 +91,21 @@ jobs:
 
       - name: Inventory package
         run: |
-          echo '=== POPIS 4.6.2 FULL TREE ==='
+          echo '=== POPIS 4.6.2 R4 REDVE FULL TREE ==='
           find POPIS_4_6_2_CAVERNA_COMPLETO -maxdepth 3 -type f | sort
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/app.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/INSTALAR_Y_ABRIR_POPIS.bat
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/00_Centro_de_Datos.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/02_SINAVE.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/09_Exportacion.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/redve.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/tema_caverna.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/territorio.py
 
       - name: Upload complete POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_6_2_CAVERNA_COMPLETO
+          name: POPIS_4_6_2_CAVERNA_COMPLETO_R4_REDVE
           path: POPIS_4_6_2_CAVERNA_COMPLETO/
           if-no-files-found: error
           retention-days: 30
