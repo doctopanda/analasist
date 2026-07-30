@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from .io_utils import Assets, discover_assets, ensure_structure, process_inbox
+from .redve import link_redve_deaths, load_redve
 from .sinave import load_bundle
 from .suive import load_suive
 from .territorio import ensure_sonora_geojson, load_geojson, normalize_population
@@ -17,6 +18,8 @@ class RuntimeContext:
     assets: Assets
     sinave: pd.DataFrame = field(default_factory=pd.DataFrame)
     suive: pd.DataFrame = field(default_factory=pd.DataFrame)
+    redve: pd.DataFrame = field(default_factory=pd.DataFrame)
+    redve_links: pd.DataFrame = field(default_factory=pd.DataFrame)
     population: pd.DataFrame | None = None
     geojson: dict | None = None
     current_year: int | None = None
@@ -31,6 +34,10 @@ class RuntimeContext:
     @property
     def has_suive(self) -> bool:
         return not self.suive.empty
+
+    @property
+    def has_redve(self) -> bool:
+        return not self.redve.empty
 
     @property
     def cutoff_label(self) -> str:
@@ -61,6 +68,20 @@ def load_runtime(root: str | Path | None = None, process_updates: bool = True,
         except Exception as exc:
             warnings.append(f"SINAVE: {exc}")
 
+    redve = pd.DataFrame()
+    redve_links = pd.DataFrame()
+    if assets.redve_file:
+        try:
+            redve = load_redve(assets.redve_file)
+        except Exception as exc:
+            warnings.append(f"REDVE: {exc}")
+
+    if not sinave.empty:
+        try:
+            sinave, redve_links = link_redve_deaths(sinave, redve)
+        except Exception as exc:
+            warnings.append(f"Cruce SINAVE–REDVE: {exc}")
+
     suive = pd.DataFrame()
     if assets.suive_file:
         try:
@@ -70,7 +91,7 @@ def load_runtime(root: str | Path | None = None, process_updates: bool = True,
 
     current_year = assets.current_year
     if current_year is None:
-        years = []
+        years: list[int] = []
         if not sinave.empty and "Año" in sinave:
             years.extend(pd.to_numeric(sinave["Año"], errors="coerce").dropna().astype(int).tolist())
         if not suive.empty:
@@ -79,7 +100,7 @@ def load_runtime(root: str | Path | None = None, process_updates: bool = True,
 
     cutoff_week = assets.cutoff_week
     if cutoff_week is None and current_year and not suive.empty:
-        weeks = suive.loc[suive["Año"].eq(current_year), "Semana"]
+        weeks = suive.loc[suive["Año"].eq(current_year) & suive["Casos"].notna(), "Semana"]
         cutoff_week = int(weeks.max()) if not weeks.empty else None
 
     population = None
@@ -102,6 +123,8 @@ def load_runtime(root: str | Path | None = None, process_updates: bool = True,
         assets=assets,
         sinave=sinave,
         suive=suive,
+        redve=redve,
+        redve_links=redve_links,
         population=population,
         geojson=geojson,
         current_year=current_year,
@@ -114,6 +137,8 @@ def load_runtime(root: str | Path | None = None, process_updates: bool = True,
 def system_status(ctx: RuntimeContext) -> pd.DataFrame:
     return pd.DataFrame([
         {"Componente": "SINAVE", "Estado": "Listo" if ctx.has_sinave else "Sin fuente", "Fuente": ctx.assets.current_sinave.name if ctx.assets.current_sinave else ""},
+        {"Componente": "REDVE / mortalidad", "Estado": "Listo" if ctx.has_redve else "Sin fuente", "Fuente": ctx.assets.redve_file.name if ctx.assets.redve_file else ""},
+        {"Componente": "Cruces SINAVE–REDVE", "Estado": f"{len(ctx.redve_links)} enlace(s)" if ctx.has_redve else "No calculado", "Fuente": "Folio → CURP → identidad única" if ctx.has_redve else ""},
         {"Componente": "SUIVE/SUAVE", "Estado": "Listo" if ctx.has_suive else "Sin fuente", "Fuente": ctx.assets.suive_file.name if ctx.assets.suive_file else ""},
         {"Componente": "Población", "Estado": "Listo" if ctx.population is not None and not ctx.population.empty else "Sin fuente compatible", "Fuente": ctx.assets.population_file.name if ctx.assets.population_file else ""},
         {"Componente": "Cartografía municipal", "Estado": "Listo" if ctx.geojson else "No disponible", "Fuente": ctx.assets.municipal_geojson.name if ctx.assets.municipal_geojson else ""},
