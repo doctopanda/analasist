@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import html
 from typing import Iterable
 
@@ -22,12 +23,55 @@ RED = "#D1495B"
 PLOTLY_COLORS = [NAVY, CORAL, GREEN, BLUE, PURPLE, AMBER, RED]
 
 
+def _install_width_compatibility() -> None:
+    """Traduce llamadas heredadas de Streamlit a la API width moderna.
+
+    Streamlit retirará ``use_container_width``. POPIS intercepta cualquier llamada
+    antigua que quede en una página o extensión y la convierte a ``width='stretch'``
+    o ``width='content'`` antes de llegar a Streamlit, evitando advertencias y
+    manteniendo compatibilidad futura.
+    """
+    if getattr(st, "_popis_width_compatibility", False):
+        return
+
+    def wrap_callable(original):
+        @functools.wraps(original)
+        def wrapped(*args, **kwargs):
+            legacy = kwargs.pop("use_container_width", None)
+            if legacy is not None and "width" not in kwargs:
+                kwargs["width"] = "stretch" if legacy else "content"
+            return original(*args, **kwargs)
+        return wrapped
+
+    for name in ("dataframe", "data_editor", "plotly_chart", "altair_chart", "vega_lite_chart", "pydeck_chart", "graphviz_chart", "pyplot", "download_button"):
+        original = getattr(st, name, None)
+        if callable(original):
+            setattr(st, name, wrap_callable(original))
+
+    # También cubre llamadas mediante columnas, contenedores y sidebar.
+    try:
+        from streamlit.delta_generator import DeltaGenerator
+
+        for name in ("dataframe", "data_editor", "plotly_chart", "altair_chart", "vega_lite_chart", "pydeck_chart", "graphviz_chart", "pyplot", "download_button"):
+            original = getattr(DeltaGenerator, name, None)
+            if callable(original) and not getattr(original, "_popis_width_wrapper", False):
+                wrapped = wrap_callable(original)
+                setattr(wrapped, "_popis_width_wrapper", True)
+                setattr(DeltaGenerator, name, wrapped)
+    except Exception:
+        # La API pública de ``st`` ya queda protegida. Este bloque solo amplía la cobertura.
+        pass
+
+    setattr(st, "_popis_width_compatibility", True)
+
+
 def apply_theme() -> None:
     """Aplica el lenguaje visual CAVERNA a toda la página Streamlit.
 
     La separación superior es deliberada: Streamlit mantiene una barra fija en la
     parte superior y, sin este colchón, el hero de POPIS puede quedar cortado.
     """
+    _install_width_compatibility()
     st.markdown(
         f"""
         <style>
