@@ -33,7 +33,7 @@ for warning in ctx.warnings:
     st.warning(warning)
 
 section("Estado del sistema")
-st.dataframe(system_status(ctx), use_container_width=True, hide_index=True)
+st.dataframe(system_status(ctx), width="stretch", hide_index=True)
 
 if not ctx.has_sinave:
     st.info(
@@ -82,7 +82,7 @@ with left:
     )
     fig.update_layout(hovermode="x unified")
     fig.update_yaxes(rangemode="tozero")
-    st.plotly_chart(style_plotly(fig), use_container_width=True)
+    st.plotly_chart(style_plotly(fig), width="stretch")
 with right:
     section("Patógenos acumulados")
     positive = pathogens[pathogens["Detecciones"].gt(0)].sort_values("Detecciones")
@@ -96,11 +96,11 @@ with right:
         )
         fig.update_layout(showlegend=False)
         fig.update_yaxes(title=None)
-        st.plotly_chart(style_plotly(fig), use_container_width=True)
+        st.plotly_chart(style_plotly(fig), width="stretch")
 
 section(f"Comparación histórica al mismo corte · SE{cutoff}")
 comparison = comparison_at_week(ctx.sinave, cutoff)
-st.dataframe(comparison, use_container_width=True, hide_index=True)
+st.dataframe(comparison, width="stretch", hide_index=True)
 
 st.caption(
     "POPIS usa SemanaInicio como eje temporal principal de SINAVE. Las semanas posteriores al último dato observado no se convierten en cero. "
