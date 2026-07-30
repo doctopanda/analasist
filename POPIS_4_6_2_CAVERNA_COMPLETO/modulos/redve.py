@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
@@ -36,7 +35,7 @@ def _name_key(apellido1: object, apellido2: object, nombres: object) -> str:
 
 def _sex_key(value: object) -> str:
     text = norm_key(value)
-    if text in {"1", "H", "HOMBRE", "MASCULINO", "MASculino".upper()}:
+    if text in {"1", "H", "HOMBRE", "MASCULINO"}:
         return "H"
     if text in {"2", "M", "MUJER", "FEMENINO"}:
         return "M"
@@ -73,8 +72,6 @@ def _extract_sinave_folios_from_text(value: object) -> set[str]:
     if not text:
         return set()
     found: set[str] = set()
-
-    # Folios alfanuméricos, por ejemplo DIA26-123456, y folios numéricos de componentes.
     patterns = [
         r"FOLIO(?:\s+EN)?(?:\s+PLATAFORMA)?(?:\s+(?:SINAVE|SIVAVE))?\s*[:#-]?\s*([A-Z]{2,6}\d{2}-?\d{4,12}|\d{5,12})",
         r"(?:SINAVE|SIVAVE)\s*(?:FOLIO)?\s*[:#\-(]?\s*([A-Z]{2,6}\d{2}-?\d{4,12}|\d{5,12})",
@@ -85,8 +82,6 @@ def _extract_sinave_folios_from_text(value: object) -> set[str]:
             normalized = _normalized_identifier(match)
             if len(normalized) >= 5:
                 found.add(normalized)
-
-    # Rescate conservador: números cercanos a la palabra SINAVE/SIVAVE.
     for marker in re.finditer(r"SINAVE|SIVAVE", text, flags=re.IGNORECASE):
         start = max(0, marker.start() - 70)
         end = min(len(text), marker.end() + 90)
@@ -191,14 +186,12 @@ def _candidate_rows_by_identity(sinave: pd.DataFrame, redve: pd.DataFrame) -> li
     names = first_existing(sinave.columns, ["Nombres", "Nombre"])
     if not (a1 and names):
         return candidates
-
     sin_names = pd.Series([
         _name_key(x, y, z)
         for x, y, z in zip(_text(sinave, a1), _text(sinave, a2), _text(sinave, names))
     ], index=sinave.index)
     sin_sex = _text(sinave, first_existing(sinave.columns, ["Sexo", "SEXO"])).map(_sex_key)
     sin_age = _sinave_age_months(sinave)
-
     sin_lookup: dict[str, list[int]] = {}
     red_lookup: dict[str, list[int]] = {}
     for idx, key in sin_names.items():
@@ -207,7 +200,6 @@ def _candidate_rows_by_identity(sinave: pd.DataFrame, redve: pd.DataFrame) -> li
     for idx, key in redve["_redve_name"].items():
         if key:
             red_lookup.setdefault(key, []).append(idx)
-
     for key in set(sin_lookup).intersection(red_lookup):
         if len(sin_lookup[key]) != 1 or len(red_lookup[key]) != 1:
             continue
@@ -225,11 +217,7 @@ def _candidate_rows_by_identity(sinave: pd.DataFrame, redve: pd.DataFrame) -> li
 
 
 def link_redve_deaths(sinave: pd.DataFrame, redve: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Enriquece SINAVE con evidencia de muerte REDVE, sin agregar casos REDVE no vinculados.
-
-    La asignación es uno a uno y prioriza folio, CURP e identidad demográfica única.
-    Devuelve la base enriquecida y una bitácora auditable de enlaces aceptados.
-    """
+    """Enriquece SINAVE con evidencia REDVE sin agregar defunciones no vinculadas."""
     out = sinave.copy()
     direct_date = pd.to_datetime(out.get("FecDefuncion_dt", pd.Series(pd.NaT, index=out.index)), errors="coerce")
     motive = _text(out, first_existing(out.columns, ["MotivoDeEgreso", "Motivo_Egreso"]))
@@ -260,10 +248,10 @@ def link_redve_deaths(sinave: pd.DataFrame, redve: pd.DataFrame) -> tuple[pd.Dat
         + _candidate_rows_by_identity(out, redve)
     )
     candidates.sort(key=lambda row: (priority.get(row[3], 9), row[0], row[1]))
-
     used_sinave: set[int] = set()
     used_redve: set[int] = set()
     accepted: list[dict[str, object]] = []
+
     for sidx, ridx, criterion, confidence in candidates:
         if sidx in used_sinave or ridx in used_redve:
             continue
@@ -288,7 +276,7 @@ def link_redve_deaths(sinave: pd.DataFrame, redve: pd.DataFrame) -> tuple[pd.Dat
         out.at[sidx, "REDVE_DEFUNCION_DICTAMINADA"] = redve.at[ridx, "REDVE_DEFUNCION_DICTAMINADA"]
         out.at[sidx, "REDVE_DEFUNCION_PROCESO_DICTAMINACION"] = redve.at[ridx, "REDVE_DEFUNCION_PROCESO_DICTAMINACION"]
         date_dictum = redve.at[ridx, "REDVE_Fecha_dictaminacion_dt"]
-        out.at[sidx, "REDVE_FECHA_DICTAMINACION"] = "" if pd.isna(date_dictum) else date_dictum
+        out.at[sidx, "REDVE_FECHA_DICTAMINACION"] = "" if pd.isna(date_dictum) else date_dictum.strftime("%Y-%m-%d")
         out.at[sidx, "Muerte atribuida a EDA REDVE"] = bool(redve.at[ridx, "Muerte atribuida a EDA REDVE"])
         out.at[sidx, "Muerte EDA pendiente REDVE"] = bool(redve.at[ridx, "Muerte EDA pendiente REDVE"])
         out.at[sidx, "Archivo REDVE"] = redve.at[ridx, "Archivo REDVE"]
