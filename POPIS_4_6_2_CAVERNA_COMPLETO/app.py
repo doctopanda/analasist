@@ -20,11 +20,11 @@ ctx = load_runtime()
 hero(
     "POPIS",
     cutoff=ctx.cutoff_label,
-    badges=["v4.6.2", "VIGILANCIA EDA", "CAVERNA UI", "CENTROIDES"],
+    badges=["v4.6.2", "VIGILANCIA EDA", "CAVERNA UI", "CENTROIDES", "REDVE"],
 )
 
 st.sidebar.markdown("### 🧬 POPIS 4.6.2")
-st.sidebar.caption("SUIVE · SINAVE · Indicadores · Territorio")
+st.sidebar.caption("SUIVE · SINAVE · REDVE · Indicadores · Territorio")
 st.sidebar.info("Usa el menú superior de la barra lateral para abrir cada módulo. Las actualizaciones nuevas pueden colocarse en `data/entrada`.")
 
 for message in ctx.inbox_messages:
@@ -53,7 +53,19 @@ k1.metric(f"Acumulado ≤ SE{cutoff}", f"{metrics['casos_acumulados']:,}")
 k2.metric(f"Casos SE{cutoff}", f"{metrics['casos_semana']:,}")
 k3.metric("Positivos acumulados", f"{metrics['positivos_acumulados']:,}")
 k4.metric("Positivos de la semana", f"{metrics['positivos_semana']:,}")
-k5.metric("Defunciones registradas", f"{metrics['defunciones_registradas']:,}", help="Registro de FecDefuncion en la base. No equivale por sí solo a muerte normativa por EDA.")
+k5.metric(
+    "Defunciones integradas",
+    f"{metrics['defunciones_integradas']:,}",
+    help=(
+        "Unión sin duplicados de evidencia de defunción en SINAVE y casos vinculados con REDVE. "
+        "No equivale por sí sola a defunción normativa atribuida a EDA."
+    ),
+)
+st.caption(
+    f"Defunciones del corte: {metrics['defunciones_sinave_con_fecha']} con fecha en SINAVE · "
+    f"{metrics['defunciones_redve_recuperadas']} recuperada(s) únicamente por REDVE · "
+    f"{metrics['muertes_eda_dictaminadas_redve']} atribuida(s) a EDA y dictaminada(s) en REDVE."
+)
 
 weekly = weekly_series(ctx.sinave)
 pathogens = pathogen_table(ctx.sinave, current_year, cutoff)
@@ -64,11 +76,7 @@ with left:
     selected_years = st.multiselect("Años a mostrar", years, default=years[-5:] if len(years) > 5 else years)
     view = weekly[weekly["Año"].isin(selected_years)] if selected_years else weekly
     fig = px.line(
-        view,
-        x="Semana",
-        y="Casos",
-        color="Año",
-        markers=True,
+        view, x="Semana", y="Casos", color="Año", markers=True,
         color_discrete_sequence=PLOTLY_COLORS,
         title="Casos SINAVE por semana epidemiológica",
     )
@@ -77,17 +85,13 @@ with left:
     st.plotly_chart(style_plotly(fig), use_container_width=True)
 with right:
     section("Patógenos acumulados")
-    p = pathogens[pathogens["Detecciones"].gt(0)].sort_values("Detecciones")
-    if p.empty:
+    positive = pathogens[pathogens["Detecciones"].gt(0)].sort_values("Detecciones")
+    if positive.empty:
         st.info("Sin detecciones positivas en el corte seleccionado.")
     else:
         fig = px.bar(
-            p,
-            x="Detecciones",
-            y="Patógeno",
-            orientation="h",
-            color="Patógeno",
-            color_discrete_sequence=PLOTLY_COLORS,
+            positive, x="Detecciones", y="Patógeno", orientation="h",
+            color="Patógeno", color_discrete_sequence=PLOTLY_COLORS,
             title=f"Detecciones acumuladas ≤ SE{cutoff}",
         )
         fig.update_layout(showlegend=False)
@@ -99,5 +103,6 @@ comparison = comparison_at_week(ctx.sinave, cutoff)
 st.dataframe(comparison, use_container_width=True, hide_index=True)
 
 st.caption(
-    "POPIS usa SemanaInicio como eje temporal principal de SINAVE. Las semanas posteriores al último dato observado no se convierten en cero. SUIVE/SUAVE y SINAVE son sistemas complementarios: se comparan y nunca se suman."
+    "POPIS usa SemanaInicio como eje temporal principal de SINAVE. Las semanas posteriores al último dato observado no se convierten en cero. "
+    "SUIVE/SUAVE y SINAVE son sistemas complementarios: se comparan y nunca se suman."
 )
