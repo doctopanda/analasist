@@ -34,6 +34,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r POPIS_4_6_2_CAVERNA_COMPLETO/requirements.txt
 
+      - name: Modernize Streamlit width API
+        working-directory: POPIS_4_6_2_CAVERNA_COMPLETO
+        run: |
+          python MODERNIZAR_STREAMLIT.py
+          if grep -R --include='*.py' -n 'use_container_width' app.py pages; then
+            echo 'Se encontraron llamadas heredadas de Streamlit.'
+            exit 1
+          fi
+
       - name: Compile complete codebase
         run: |
           python -m compileall -q POPIS_4_6_2_CAVERNA_COMPLETO
@@ -91,9 +100,10 @@ jobs:
 
       - name: Inventory package
         run: |
-          echo '=== POPIS 4.6.2 R4 REDVE FULL TREE ==='
+          echo '=== POPIS 4.6.2 R5 STREAMLIT FULL TREE ==='
           find POPIS_4_6_2_CAVERNA_COMPLETO -maxdepth 3 -type f | sort
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/app.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/MODERNIZAR_STREAMLIT.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/INSTALAR_Y_ABRIR_POPIS.bat
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/00_Centro_de_Datos.py
           test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/02_SINAVE.py
@@ -105,7 +115,7 @@ jobs:
       - name: Upload complete POPIS package
         uses: actions/upload-artifact@v4
         with:
-          name: POPIS_4_6_2_CAVERNA_COMPLETO_R4_REDVE
+          name: POPIS_4_6_2_CAVERNA_COMPLETO_R5_STREAMLIT
           path: POPIS_4_6_2_CAVERNA_COMPLETO/
           if-no-files-found: error
           retention-days: 30
