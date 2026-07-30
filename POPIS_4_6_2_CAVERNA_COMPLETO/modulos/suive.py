@@ -55,7 +55,8 @@ def _header_candidates(raw: pd.DataFrame) -> list[tuple[int, int, int]]:
             # POBLACIÓN es la firma más fuerte del bloque de casos crudos.
             score = (1000 if has_population else 0) + len(week_labels)
             candidates.append((score, r, c))
-    return sorted(candidates, reverse=True)
+    # Mayor puntuación primero; si empatan, conservar el bloque superior de la hoja.
+    return sorted(candidates, key=lambda item: (-item[0], item[1], item[2]))
 
 
 def _read_year_block(raw: pd.DataFrame, header_row: int, year_col: int) -> pd.DataFrame:
