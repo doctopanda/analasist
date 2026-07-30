@@ -1,0 +1,128 @@
+name: Test POPIS 4.6.2 CAVERNA Completo
+
+on:
+  push:
+    branches:
+      - popis-4.6.2-caverna-completo-final2
+    paths:
+      - 'POPIS_4_6_2_CAVERNA_COMPLETO/**'
+      - '.github/workflows/test-popis-462-caverna-completo.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'POPIS_4_6_2_CAVERNA_COMPLETO/**'
+      - '.github/workflows/test-popis-462-caverna-completo.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: POPIS_4_6_2_CAVERNA_COMPLETO/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r POPIS_4_6_2_CAVERNA_COMPLETO/requirements.txt
+
+      - name: Modernize Streamlit width API
+        working-directory: POPIS_4_6_2_CAVERNA_COMPLETO
+        run: |
+          python MODERNIZAR_STREAMLIT.py
+          if grep -R --include='*.py' -n 'use_container_width' app.py pages; then
+            echo 'Se encontraron llamadas heredadas de Streamlit.'
+            exit 1
+          fi
+
+      - name: Compile complete codebase
+        run: |
+          python -m compileall -q POPIS_4_6_2_CAVERNA_COMPLETO
+
+      - name: Full synthetic functional test
+        working-directory: POPIS_4_6_2_CAVERNA_COMPLETO
+        run: |
+          python SELFTEST_POPIS.py
+
+      - name: SUIVE multiblock regression test
+        working-directory: POPIS_4_6_2_CAVERNA_COMPLETO
+        run: |
+          python TEST_SUIVE_BLOQUES.py
+
+      - name: Validate standalone imports
+        working-directory: POPIS_4_6_2_CAVERNA_COMPLETO
+        run: |
+          python - <<'PY'
+          import modulos.tema_caverna
+          import modulos.io_utils
+          import modulos.redve
+          import modulos.sinave
+          import modulos.suive
+          import modulos.canal_endemico
+          import modulos.comparativo
+          import modulos.indicadores
+          import modulos.territorio
+          import modulos.calidad
+          import modulos.exportacion
+          import modulos.runtime
+          print('Todos los motores POPIS importan correctamente')
+          PY
+
+      - name: Assemble full standalone structure
+        run: |
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/historicos
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/actual
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/suive
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/poblacion
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/geografia
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/redve
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/entrada
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/data/backups
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/salidas
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/cache
+          mkdir -p POPIS_4_6_2_CAVERNA_COMPLETO/logs
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/historicos/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/actual/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/suive/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/poblacion/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/geografia/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/redve/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/entrada/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/data/backups/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/salidas/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/cache/.gitkeep
+          touch POPIS_4_6_2_CAVERNA_COMPLETO/logs/.gitkeep
+          find POPIS_4_6_2_CAVERNA_COMPLETO -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find POPIS_4_6_2_CAVERNA_COMPLETO -type f -name '*.pyc' -delete
+
+      - name: Inventory package
+        run: |
+          echo '=== POPIS 4.6.2 R6 SUIVE 2026 FULL TREE ==='
+          find POPIS_4_6_2_CAVERNA_COMPLETO -maxdepth 3 -type f | sort
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/app.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/MODERNIZAR_STREAMLIT.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/TEST_SUIVE_BLOQUES.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/INSTALAR_Y_ABRIR_POPIS.bat
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/00_Centro_de_Datos.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/02_SINAVE.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/pages/09_Exportacion.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/redve.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/suive.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/tema_caverna.py
+          test -f POPIS_4_6_2_CAVERNA_COMPLETO/modulos/territorio.py
+
+      - name: Upload complete POPIS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: POPIS_4_6_2_CAVERNA_COMPLETO_R6_SUIVE_2026
+          path: POPIS_4_6_2_CAVERNA_COMPLETO/
+          if-no-files-found: error
+          retention-days: 30

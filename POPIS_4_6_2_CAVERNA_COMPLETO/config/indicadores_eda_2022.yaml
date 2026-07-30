@@ -1,0 +1,52 @@
+manual: "Manual de Procedimientos Estandarizados para la Vigilancia Epidemiológica de Enfermedad Diarreica Aguda 2022"
+version_config: 1
+escala:
+  sobresaliente: [90, 100]
+  satisfactorio: [80, 89.999]
+  minimo: [60, 79.999]
+  precario: [0, 59.999]
+indicadores:
+  colera_notificacion_oportuna:
+    nombre: "Notificación oportuna de cólera"
+    meta: 100
+    unidad: "%"
+    descripcion: "Casos probables de cólera notificados dentro de 24 horas del primer contacto."
+  colera_muestra:
+    nombre: "Casos probables de cólera con muestra"
+    meta: 80
+    unidad: "%"
+  colera_clasificacion_oportuna:
+    nombre: "Clasificación oportuna de cólera"
+    meta: 80
+    unidad: "%"
+    dias_max: 14
+  reporte_negativo:
+    nombre: "Cobertura de reporte negativo"
+    meta: 80
+    unidad: "%"
+  nutra_notificacion_oportuna:
+    nombre: "Notificación oportuna EDA NuTraVE"
+    meta: 100
+    unidad: "%"
+  nutra_clasificacion_oportuna:
+    nombre: "Clasificación oportuna EDA NuTraVE"
+    meta: 80
+    unidad: "%"
+    dias_max: 9
+  nutra_cobertura_notificacion:
+    nombre: "Cobertura de notificación NuTraVE"
+    meta: 80
+    unidad: "%"
+  muestreo_menor5_moderada_severa:
+    nombre: "Muestreo en menores de 5 años con EDA moderada/severa"
+    meta: 80
+    unidad: "%"
+  muestreo_mayor5_moderada_severa:
+    nombre: "Muestreo en personas de 5 años y más con EDA moderada/severa"
+    meta: 80
+    unidad: "%"
+  monitoreo_2porciento:
+    nombre: "Monitoreo del 2% de EDA"
+    meta: 80
+    unidad: "%"
+    nota: "El denominador normativo requiere el total EDA de vigilancia convencional de los cinco años previos; no se infiere solo con SINAVE."

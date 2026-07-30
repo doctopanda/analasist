@@ -1,0 +1,31 @@
+version: 1
+fuentes:
+  sinave:
+    historicos: "data/historicos"
+    actual: "data/actual"
+    firmas_columnas:
+      - Folio
+      - SemanaInicio
+      - Fec_captura
+      - Diag_Final
+  suive:
+    directorio: "data/suive"
+    hoja_preferida: "SUIVE"
+  poblacion:
+    directorio: "data/poblacion"
+    municipio_candidatos: [Municipio, MUNICIPIO, NOM_MUN, NOMGEO]
+    poblacion_candidatos: [Poblacion, POBLACION, Población, POB, Total]
+    anio_candidatos: [Año, ANIO, ANO, Anio]
+  geografia:
+    directorio: "data/geografia"
+    inegi_geojson_sonora: "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgem/26"
+  entrada:
+    directorio: "data/entrada"
+  backups:
+    directorio: "data/backups"
+reglas:
+  semana_sinave: "SemanaInicio"
+  geografia_primaria: "Mun_Res"
+  no_sumar_sistemas: true
+  etiqueta_razon: "Razón de registro SINAVE/SUIVE"
+  mapa_predeterminado: "centroide_municipal"

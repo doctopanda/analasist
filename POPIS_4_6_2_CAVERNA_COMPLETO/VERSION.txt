@@ -1,0 +1,10 @@
+POPIS 4.6.2 CAVERNA COMPLETO · R6 SUIVE 2026
+Procesador Operativo de Patógenos e Indicadores Sanitarios
+Build: 2026-07-30
+Mapa predeterminado: centroides municipales
+Visual: CAVERNA
+Mortalidad: cruce auditable SINAVE + REDVE
+Comparadores: casos SE y acumulado al mismo corte por año
+Compatibilidad: API Streamlit width moderna, sin use_container_width
+SUIVE: selección del bloque bruto Año × SE × POBLACIÓN; matrices derivadas no reemplazan los casos
+Cortes: SUIVE y SINAVE conservan su última semana observada de forma independiente

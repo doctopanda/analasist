@@ -1,0 +1,31 @@
+POPIS 4.6.2 CAVERNA - CARPETAS DE DATOS
+========================================
+
+historicos\
+  Bases SINAVE EDA de años cerrados, por ejemplo Diarreas_2022.xls ... Diarreas_2025.xls
+
+actual\
+  Base SINAVE vigente. El Centro de Datos puede mantenerla como Diarreas_actual.xls.
+
+suive\
+  Fuente SUIVE/SUAVE. Puede ser una tabla larga Año-Semana-Casos o el libro semanal del canal endémico.
+
+poblacion\
+  Denominadores municipales. Preferentemente proyecciones CONAPO por municipio y año.
+
+geografia\
+  GeoJSON municipal de Sonora. Si falta, POPIS puede intentar obtener el límite municipal desde el servicio oficial de INEGI y guardarlo localmente.
+
+entrada\
+  Bandeja de actualización. Deja aquí una nueva fuente y POPIS intentará clasificarla e integrarla con respaldo de la fuente operativa anterior.
+
+backups\
+  Respaldos creados automáticamente antes de sustituir fuentes operativas.
+
+IMPORTANTE
+----------
+- POPIS no suma SUIVE con SINAVE.
+- El eje temporal principal SINAVE es SemanaInicio.
+- La territorialización utiliza municipio de residencia.
+- El mapa 4.6.2 utiliza centroides municipales aproximados, no domicilios exactos.
+- No incluyas bases nominales sensibles al distribuir el código fuera del entorno institucional.
